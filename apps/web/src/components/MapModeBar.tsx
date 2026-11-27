@@ -60,11 +60,11 @@ export const MapModeBar: React.FC<MapModeBarProps> = ({ activeMode, onSelectMode
   return (
     <div
       ref={ref}
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
+      className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 pointer-events-auto"
     >
       {/* Dropdown panel — opens upward */}
       {open && (
-        <div className="mb-2 bg-slate-950/95 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md w-56">
+        <div className="mb-2 bg-slate-950/95 border border-slate-700/60 rounded-2xl shadow-2xl overflow-y-auto max-h-[60vh] backdrop-blur-md w-56">
           {modesList.map((modeKey) => {
             const config = MAP_MODES[modeKey];
             const isActive = activeMode === modeKey;
