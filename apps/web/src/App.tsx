@@ -43,7 +43,7 @@ export const App: React.FC = () => {
     return fresh;
   });
 
-  const [activeMode, setActiveMode] = useState<MapMode>('economy');
+  const [activeMode, setActiveMode] = useState<MapMode>('normal');
   const [inspectedStateCode, setInspectedStateCode] = useState<TerritoryCode>('MH');
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);

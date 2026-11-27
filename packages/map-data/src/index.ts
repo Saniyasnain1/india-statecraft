@@ -66,6 +66,19 @@ const TERRAIN_ELEVATION_SCORES: Record<TerritoryCode, number> = {
 };
 
 export const MAP_MODES: Record<MapMode, MapModeConfig> = {
+  // 0. Normal: Flat political view — clean state colours, no data overlay
+  normal: {
+    id: 'normal',
+    label: 'Normal View',
+    description: 'Default political map view. Each state shown with a distinct flat colour. No data overlay.',
+    unit: '',
+    minVal: 0,
+    maxVal: 1,
+    colorStops: [[0, '#1e3a5f'], [1, '#1e3a5f']],
+    getValue: (_s) => 0,
+    formatValue: (_v) => '',
+  },
+
   // 1. Terrain: Topographic physical relief
   terrain: {
     id: 'terrain',

@@ -15,6 +15,7 @@ export type UnionTerritoryCode =
 export type TerritoryCode = IndianStateCode | UnionTerritoryCode;
 
 export type MapMode =
+  | 'normal'
   | 'terrain'
   | 'economy'
   | 'population'

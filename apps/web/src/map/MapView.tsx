@@ -334,6 +334,32 @@ function updateMapColors(
 ) {
   if (!map.getLayer('states-fill')) return;
 
+  // --- NORMAL VIEW: distinct flat political colours per state ---
+  if (activeMode === 'normal') {
+    // A curated palette of 12 distinct muted-but-readable political colours
+    const POLITICAL_PALETTE: string[] = [
+      '#1e4d6b', '#2d6a4f', '#4a4080', '#6b3030',
+      '#1a5c4a', '#5c4a1a', '#3d4a6b', '#6b4a2d',
+      '#2d4a6b', '#4a6b2d', '#6b2d4a', '#2d6b5c',
+    ];
+    // Assign each state a stable colour by hashing its code
+    const matchExpr: any[] = ['match', ['get', 'code']];
+    for (const code of Object.keys(states)) {
+      let hash = 0;
+      for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) % POLITICAL_PALETTE.length;
+      matchExpr.push(code, POLITICAL_PALETTE[Math.abs(hash)]);
+    }
+    matchExpr.push('#1e3a5f'); // fallback
+    map.setPaintProperty('states-fill', 'fill-color', matchExpr);
+    map.setPaintProperty('states-fill', 'fill-opacity', 0.75);
+    if (map.getLayer('states-borders')) {
+      map.setPaintProperty('states-borders', 'line-color', '#7dd3fc');
+      map.setPaintProperty('states-borders', 'line-width', 1.2);
+    }
+    return;
+  }
+
+  // --- ALL OTHER MODES: choropleth heatmap ---
   const modeConfig = MAP_MODES[activeMode];
   if (!modeConfig) return;
 
@@ -349,6 +375,7 @@ function updateMapColors(
   matchExpr.push('#334155');
 
   map.setPaintProperty('states-fill', 'fill-color', matchExpr);
+  map.setPaintProperty('states-fill', 'fill-opacity', 0.82);
 
   // When in economy mode, border outlines glow warm gold
   if (map.getLayer('states-borders')) {
@@ -357,5 +384,6 @@ function updateMapColors(
       'line-color',
       activeMode === 'economy' ? '#f59e0b' : '#38bdf8'
     );
+    map.setPaintProperty('states-borders', 'line-width', 1.4);
   }
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Map,
   Globe,
   TrendingUp,
   Users,
@@ -22,6 +23,7 @@ interface MapModeBarProps {
 }
 
 const MODE_ICONS: Record<MapMode, React.ReactNode> = {
+  normal: <Map className="w-4 h-4" />,
   terrain: <Globe className="w-4 h-4" />,
   economy: <TrendingUp className="w-4 h-4" />,
   population: <Users className="w-4 h-4" />,
