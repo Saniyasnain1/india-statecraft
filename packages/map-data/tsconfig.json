@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "declaration": true
+    "declaration": true,
+    "paths": {
+      "@india-statecraft/shared-types": ["../shared-types/src/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }

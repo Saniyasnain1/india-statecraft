@@ -3,7 +3,13 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "outDir": "./dist",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@india-statecraft/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@india-statecraft/game-data": ["../../packages/game-data/src/index.ts"],
+      "@india-statecraft/map-data": ["../../packages/map-data/src/index.ts"],
+      "@india-statecraft/simulation": ["../../packages/simulation/src/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }
