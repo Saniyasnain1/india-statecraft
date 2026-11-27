@@ -1,0 +1,25 @@
+{
+  "name": "india-statecraft",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A browser-first real-time Indian state development and strategy game",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "strategy-game",
+    "geopolitics",
+    "india",
+    "maplibre",
+    "simulation"
+  ],
+  "author": "",
+  "license": "MIT"
+}
