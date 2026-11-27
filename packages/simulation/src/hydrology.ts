@@ -44,6 +44,5 @@ export function stepHydrology(
     reservoirStoragePercent: nextStorage,
     downstreamDischargeCusecs: discharge,
     groundwaterStressLevel: stress,
-    dataOrigin: 'SIMULATED_DYNAMIC',
   };
 }

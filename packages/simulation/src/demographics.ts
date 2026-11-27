@@ -46,6 +46,5 @@ export function stepDemographics(
     unemploymentRate: Number(nextUnemployment.toFixed(4)),
     netMonthlyMigration: netMigration,
     happinessIndex: nextHappiness,
-    dataOrigin: 'SIMULATED_DYNAMIC',
   };
 }

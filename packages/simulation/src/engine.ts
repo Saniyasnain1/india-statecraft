@@ -4,8 +4,13 @@ import {
   StateProfile,
   TerritoryCode,
   IndianStateCode,
+  GameSpeed,
 } from '@india-statecraft/shared-types';
-import { ALL_TERRITORIES_DATA } from '@india-statecraft/game-data';
+import {
+  ALL_TERRITORIES_DATA,
+  BUILDING_DEFINITIONS,
+  calculateTrainEconomics,
+} from '@india-statecraft/game-data';
 import { stepEconomy } from './economy.js';
 import { stepDemographics } from './demographics.js';
 import { stepHydrology } from './hydrology.js';
@@ -16,48 +21,72 @@ export interface StepOutput {
   electionResults: Partial<Record<TerritoryCode, ElectionResult>>;
 }
 
+export function getTickRateFromSpeed(speed: GameSpeed): number {
+  switch (speed) {
+    case 0:
+      return 2000;
+    case 1:
+      return 2000;
+    case 2:
+      return 1000;
+    case 4:
+      return 500;
+    case 8:
+      return 250;
+    default:
+      return 2000;
+  }
+}
+
 /**
- * Creates a brand new fresh initial game state.
+ * Creates fresh initial game state.
  */
 export function createInitialGameState(selectedState: IndianStateCode = 'MH'): GameState {
   return {
-    version: '0.1.0',
+    version: '0.2.0',
+    phase: 'STATE_SELECT', // Start in state selection mode
     selectedPlayerState: selectedState,
+    inspectedState: selectedState,
     clock: {
       currentTick: 1,
       currentYear: 2026,
       currentMonth: 1,
       isPaused: false,
+      speed: 1,
       tickRateMs: 2000,
     },
     states: JSON.parse(JSON.stringify(ALL_TERRITORIES_DATA)),
+    globalMarketPrices: {
+      freightCargoUnitUSD: 0.15,
+      passengerKmUSD: 0.28,
+      powerMWhUSD: 65,
+      rawMaterialsUnitUSD: 42,
+    },
   };
 }
 
 /**
  * Pure deterministic reducer stepping the simulation forward.
  */
-export function stepSimulation(
-  currentState: GameState,
-  action?: PlayerAction
-): StepOutput {
-  // If an action was dispatched, handle it
+export function stepSimulation(currentState: GameState, action?: PlayerAction): StepOutput {
   let state = { ...currentState };
 
   if (action) {
     state = handlePlayerAction(state, action);
-    // If the action was just pause/resume or config change, return without stepping time
+    // If the action was just UI state, speed, or pause, return immediately without ticking time
     if (
-      action.type === 'PAUSE_SIMULATION' ||
-      action.type === 'RESUME_SIMULATION' ||
-      action.type === 'SET_TICK_RATE'
+      action.type === 'SELECT_STATE_TO_PLAY' ||
+      action.type === 'SET_INSPECTED_STATE' ||
+      action.type === 'SET_GAME_PHASE' ||
+      action.type === 'SET_GAME_SPEED' ||
+      action.type === 'TOGGLE_PAUSE'
     ) {
       return { nextState: state, electionResults: {} };
     }
   }
 
-  // If clock is paused, no time passage
-  if (state.clock.isPaused) {
+  // If clock is paused or speed is 0 or still in state select phase, don't tick time
+  if (state.clock.isPaused || state.clock.speed === 0 || state.phase !== 'PLAYING') {
     return { nextState: state, electionResults: {} };
   }
 
@@ -76,32 +105,61 @@ export function stepSimulation(
 
   // 2. Step all 28 states and 8 UTs
   for (const [code, prevState] of Object.entries(state.states) as [TerritoryCode, StateProfile][]) {
-    // Economy
+    // 2a. Advance building construction ticks
+    const updatedBuildings = prevState.buildings.map((b) => {
+      if (b.isUnderConstruction && b.ticksRemaining > 0) {
+        const remaining = b.ticksRemaining - 1;
+        return {
+          ...b,
+          ticksRemaining: remaining,
+          isUnderConstruction: remaining > 0,
+        };
+      }
+      return b;
+    });
+
+    // 2b. Recalculate train route economics
+    const updatedRoutes = prevState.routes.map((route) => {
+      const eco = calculateTrainEconomics(route.distanceKm, route.trainType, route.activeTrainsCount);
+      return {
+        ...route,
+        cargoCarriedMonthlyUnits: eco.monthlyCargoUnits,
+        passengersCarriedMonthly: eco.monthlyPassengers,
+        monthlyRevenueUSD: eco.monthlyRevenueUSD,
+        monthlyOperatingCostUSD: eco.monthlyOperatingCostUSD,
+        monthlyMaintenanceCostUSD: eco.monthlyMaintenanceCostUSD,
+        monthlyProfitUSD: eco.monthlyProfitUSD,
+      };
+    });
+
+    // 2c. Economy step (USD values)
     const nextEconomy = stepEconomy(
       prevState.economy,
+      updatedBuildings,
+      updatedRoutes,
       prevState.infrastructure.powerGridReliabilityIndex,
       isMonsoon
     );
 
     const monthlyGrowth =
-      (nextEconomy.gsdpNominalCrore - prevState.economy.gsdpNominalCrore) / prevState.economy.gsdpNominalCrore;
+      (nextEconomy.gdpUSD - prevState.economy.gdpUSD) / Math.max(1, prevState.economy.gdpUSD);
 
-    // Demographics
+    // 2d. Demographics step
     const nextDemographics = stepDemographics(
       prevState.demographics,
       monthlyGrowth,
       prevState.infrastructure.powerGridReliabilityIndex
     );
 
-    // Hydrology
+    // 2e. Hydrology step
     const nextWater = stepHydrology(prevState.water, nextMonth);
 
-    // Politics
+    // 2f. Politics step
     const { politics: nextPolitics, electionResult } = stepPolitics(
       prevState.politics,
       nextDemographics.happinessIndex,
-      nextEconomy.fiscalDeficitGsdpRatio,
-      nextDemographics.unemploymentRate
+      nextDemographics.unemploymentRate,
+      nextEconomy.taxPolicy
     );
 
     if (electionResult && electionResult.occurred) {
@@ -110,21 +168,19 @@ export function stepSimulation(
 
     nextStates[code] = {
       ...prevState,
+      buildings: updatedBuildings,
+      routes: updatedRoutes,
       economy: nextEconomy,
       demographics: nextDemographics,
       water: nextWater,
       politics: nextPolitics,
-      // Dynamic output index syncs
       industryOutputIndex: Math.min(
         100,
         Math.round(prevState.industryOutputIndex * (1 + monthlyGrowth * 0.5))
       ),
       agricultureOutputIndex: Math.min(
         100,
-        Math.round(
-          prevState.agricultureOutputIndex *
-            (isMonsoon ? 1.01 : 0.998)
-        )
+        Math.round(prevState.agricultureOutputIndex * (isMonsoon ? 1.01 : 0.998))
       ),
       tradeVolumeIndex: Math.min(
         100,
@@ -149,23 +205,54 @@ export function stepSimulation(
 
 function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
   switch (action.type) {
-    case 'PAUSE_SIMULATION':
-      return { ...state, clock: { ...state.clock, isPaused: true } };
+    case 'SELECT_STATE_TO_PLAY':
+      return {
+        ...state,
+        selectedPlayerState: action.stateCode,
+        inspectedState: action.stateCode,
+        phase: 'PLAYING',
+      };
 
-    case 'RESUME_SIMULATION':
-      return { ...state, clock: { ...state.clock, isPaused: false } };
+    case 'SET_INSPECTED_STATE':
+      return {
+        ...state,
+        inspectedState: action.stateCode,
+      };
 
-    case 'SET_TICK_RATE':
-      return { ...state, clock: { ...state.clock, tickRateMs: action.rateMs } };
+    case 'SET_GAME_PHASE':
+      return {
+        ...state,
+        phase: action.phase,
+      };
 
-    case 'ALLOCATE_BUDGET': {
+    case 'TOGGLE_PAUSE':
+      return {
+        ...state,
+        clock: {
+          ...state.clock,
+          isPaused: !state.clock.isPaused,
+        },
+      };
+
+    case 'SET_GAME_SPEED':
+      return {
+        ...state,
+        clock: {
+          ...state.clock,
+          speed: action.speed,
+          isPaused: action.speed === 0,
+          tickRateMs: getTickRateFromSpeed(action.speed),
+        },
+      };
+
+    case 'UPDATE_TAX_POLICY': {
       const stateObj = state.states[action.stateCode];
       if (!stateObj) return state;
 
-      const totalDiscretionary =
-        stateObj.economy.budget.capitalExpenditure + stateObj.economy.budget.welfareAndSubsidies;
-      const newCapex = Math.round(totalDiscretionary * action.capexShare);
-      const newWelfare = totalDiscretionary - newCapex;
+      const updatedPolicy = {
+        ...stateObj.economy.taxPolicy,
+        ...action.taxPolicy,
+      };
 
       return {
         ...state,
@@ -175,25 +262,107 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
             ...stateObj,
             economy: {
               ...stateObj.economy,
-              budget: {
-                ...stateObj.economy.budget,
-                capitalExpenditure: newCapex,
-                welfareAndSubsidies: newWelfare,
-              },
+              taxPolicy: updatedPolicy,
             },
           },
         },
       };
     }
 
-    case 'ADJUST_TAX_RATES': {
+    case 'COMMENCE_BUILDING_CONSTRUCTION': {
+      const stateObj = state.states[action.stateCode];
+      const buildingDef = BUILDING_DEFINITIONS[action.buildingType];
+      if (!stateObj || !buildingDef) return state;
+
+      // Check treasury funds
+      if (stateObj.economy.treasuryUSD < buildingDef.constructionCostUSD) {
+        return state; // Insufficient funds
+      }
+
+      // Check geographic suitability
+      if (buildingDef.requiresRiver && stateObj.majorRivers.length === 0) {
+        return state; // Dam requires a river
+      }
+      if (buildingDef.requiresCoastal && stateObj.infrastructure.portType !== 'COASTAL_PORT') {
+        return state; // Seaport requires coastal geography
+      }
+
+      const newBuildingInstance = {
+        id: `b_${action.stateCode.toLowerCase()}_${Date.now()}`,
+        type: action.buildingType,
+        isUnderConstruction: true,
+        ticksRemaining: buildingDef.constructionTimeTicks,
+        totalTicks: buildingDef.constructionTimeTicks,
+        healthPercent: 100,
+      };
+
+      const nextTreasury = stateObj.economy.treasuryUSD - buildingDef.constructionCostUSD;
+
+      return {
+        ...state,
+        states: {
+          ...state.states,
+          [action.stateCode]: {
+            ...stateObj,
+            economy: {
+              ...stateObj.economy,
+              treasuryUSD: nextTreasury,
+            },
+            buildings: [...stateObj.buildings, newBuildingInstance],
+          },
+        },
+      };
+    }
+
+    case 'PURCHASE_TRAIN_ROUTE': {
       const stateObj = state.states[action.stateCode];
       if (!stateObj) return state;
 
-      const nextSgst = Math.round(stateObj.economy.budget.sgst * (1 + action.sgstAdjustment));
-      const nextStamp = Math.round(
-        stateObj.economy.budget.stampDutyRegistration * (1 + action.stampDutyAdjustment)
+      const eco = calculateTrainEconomics(
+        action.distanceKm,
+        action.trainType,
+        action.activeTrainsCount
       );
+
+      const newRoute = {
+        id: `route_${Date.now()}`,
+        name: `${action.fromCity} ↔ ${action.toCity} Transit`,
+        trainType: action.trainType,
+        originState: action.stateCode,
+        destinationState: action.stateCode,
+        originCity: action.fromCity,
+        destinationCity: action.toCity,
+        distanceKm: action.distanceKm,
+        activeTrainsCount: action.activeTrainsCount,
+        isInterstate: false,
+        cargoCarriedMonthlyUnits: eco.monthlyCargoUnits,
+        passengersCarriedMonthly: eco.monthlyPassengers,
+        monthlyRevenueUSD: eco.monthlyRevenueUSD,
+        monthlyOperatingCostUSD: eco.monthlyOperatingCostUSD,
+        monthlyMaintenanceCostUSD: eco.monthlyMaintenanceCostUSD,
+        monthlyProfitUSD: eco.monthlyProfitUSD,
+      };
+
+      return {
+        ...state,
+        states: {
+          ...state.states,
+          [action.stateCode]: {
+            ...stateObj,
+            routes: [...stateObj.routes, newRoute],
+          },
+        },
+      };
+    }
+
+    case 'REBALANCE_PUBLIC_BUDGET': {
+      const stateObj = state.states[action.stateCode];
+      if (!stateObj) return state;
+
+      const totalDiscretionary =
+        stateObj.economy.budget.publicInvestmentUSD + stateObj.economy.budget.welfareAndSubsidiesUSD;
+      const newInvest = Math.round(totalDiscretionary * action.publicInvestmentShare);
+      const newWelfare = totalDiscretionary - newInvest;
 
       return {
         ...state,
@@ -205,8 +374,8 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
               ...stateObj.economy,
               budget: {
                 ...stateObj.economy.budget,
-                sgst: nextSgst,
-                stampDutyRegistration: nextStamp,
+                publicInvestmentUSD: newInvest,
+                welfareAndSubsidiesUSD: newWelfare,
               },
             },
           },

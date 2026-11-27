@@ -1,46 +1,16 @@
 /**
  * India: Statecraft — Shared Type Definitions
+ * Universal Game Currency: USD ($)
  */
 
 export type IndianStateCode =
-  | 'AP' // Andhra Pradesh
-  | 'AR' // Arunachal Pradesh
-  | 'AS' // Assam
-  | 'BR' // Bihar
-  | 'CG' // Chhattisgarh
-  | 'GA' // Goa
-  | 'GJ' // Gujarat
-  | 'HR' // Haryana
-  | 'HP' // Himachal Pradesh
-  | 'JH' // Jharkhand
-  | 'KA' // Karnataka
-  | 'KL' // Kerala
-  | 'MP' // Madhya Pradesh
-  | 'MH' // Maharashtra
-  | 'MN' // Manipur
-  | 'ML' // Meghalaya
-  | 'MZ' // Mizoram
-  | 'NL' // Nagaland
-  | 'OD' // Odisha
-  | 'PB' // Punjab
-  | 'RJ' // Rajasthan
-  | 'SK' // Sikkim
-  | 'TN' // Tamil Nadu
-  | 'TS' // Telangana
-  | 'TR' // Tripura
-  | 'UP' // Uttar Pradesh
-  | 'UK' // Uttarakhand
-  | 'WB'; // West Bengal
+  | 'AP' | 'AR' | 'AS' | 'BR' | 'CG' | 'GA' | 'GJ' | 'HR'
+  | 'HP' | 'JH' | 'KA' | 'KL' | 'MP' | 'MH' | 'MN' | 'ML'
+  | 'MZ' | 'NL' | 'OD' | 'PB' | 'RJ' | 'SK' | 'TN' | 'TS'
+  | 'TR' | 'UP' | 'UK' | 'WB';
 
 export type UnionTerritoryCode =
-  | 'AN' // Andaman and Nicobar Islands
-  | 'CH' // Chandigarh
-  | 'DNHDD' // Dadra and Nagar Haveli and Daman and Diu
-  | 'DL' // Delhi (NCT)
-  | 'JK' // Jammu and Kashmir
-  | 'LA' // Ladakh
-  | 'LD' // Lakshadweep
-  | 'PY'; // Puducherry
+  | 'AN' | 'CH' | 'DNHDD' | 'DL' | 'JK' | 'LA' | 'LD' | 'PY';
 
 export type TerritoryCode = IndianStateCode | UnionTerritoryCode;
 
@@ -58,117 +28,231 @@ export type MapMode =
   | 'trade'
   | 'waterResources';
 
-export type DataOrigin = 'ESTABLISHED_BASELINE' | 'SIMULATED_DYNAMIC' | 'DEVELOPMENT_PLACEHOLDER';
+export type GameSpeed = 0 | 1 | 2 | 4 | 8;
+export type GamePhase = 'WORLD_SELECT' | 'STATE_SELECT' | 'PLAYING';
+export type ActiveTab = 'overview' | 'government' | 'economy' | 'industry' | 'transport' | 'research' | 'diplomacy' | 'elections';
 
-export interface BudgetBreakdown {
-  // Revenue receipts (in Crore INR per month)
-  sgst: number;
-  stateExcise: number;
-  stampDutyRegistration: number;
-  motorVehicleTax: number;
-  electricityDuty: number;
-  nonTaxRevenue: number;
-  unionDevolutionAndGrants: number;
-  // Expenditure (in Crore INR per month)
-  salariesAndPensions: number;
-  debtServicing: number;
-  welfareAndSubsidies: number;
-  capitalExpenditure: number;
-  maintenanceOperations: number;
+export interface TaxPolicySettings {
+  businessTaxRate: number;      // e.g. 0.18 (18%)
+  consumptionTaxRate: number;   // SGST equivalent, e.g. 0.12 (12%)
+  propertyTaxRate: number;      // e.g. 0.05 (5%)
+  stateExciseTaxRate: number;   // e.g. 0.20 (20%)
+  vehicleTaxRate: number;       // e.g. 0.08 (8%)
+  electricityDutyRate: number;  // e.g. 0.06 (6%)
+}
+
+export interface BudgetBreakdownUSD {
+  // Monthly Revenues ($ USD)
+  businessTaxRevenueUSD: number;
+  consumptionTaxRevenueUSD: number;
+  propertyTaxRevenueUSD: number;
+  exciseTaxRevenueUSD: number;
+  vehicleTaxRevenueUSD: number;
+  electricityTaxRevenueUSD: number;
+  transportProfitsUSD: number;
+  centralTransfersUSD: number;
+  
+  // Monthly Expenditures ($ USD)
+  publicSalariesUSD: number;
+  infrastructureMaintenanceUSD: number;
+  welfareAndSubsidiesUSD: number;
+  debtServicingUSD: number;
+  publicInvestmentUSD: number;
 }
 
 export interface EconomyMetrics {
-  gsdpNominalCrore: number; // Gross State Domestic Product in Crore INR
-  perCapitaIncomeINR: number;
-  monthlyRevenueCrore: number;
-  monthlyExpenditureCrore: number;
-  fiscalDeficitGsdpRatio: number; // e.g. 0.028 for 2.8%
-  stateDebtCrore: number;
-  inflationRate: number; // percentage e.g. 5.1%
-  budget: BudgetBreakdown;
-  dataOrigin: DataOrigin;
+  treasuryUSD: number;
+  gdpUSD: number;
+  gdpGrowthRate: number; // e.g. 0.065 for 6.5% annual
+  growthRateAnnual?: number;
+  gdpPerCapitaUSD: number;
+  monthlyRevenueUSD: number;
+  monthlyExpenditureUSD: number;
+  monthlySurplusUSD: number;
+  debtUSD: number;
+  inflationRate: number; // e.g. 0.045 for 4.5%
+  taxPolicy: TaxPolicySettings;
+  budget: BudgetBreakdownUSD;
 }
 
 export interface DemographicMetrics {
   population: number;
-  urbanizationRate: number; // 0.0 to 1.0
-  literacyRate: number;     // 0.0 to 1.0
+  urbanizationRate: number;
+  literacyRate: number;
   laborForceSize: number;
-  unemploymentRate: number; // 0.0 to 1.0
+  unemploymentRate: number;
   netMonthlyMigration: number;
-  happinessIndex: number;   // 0 to 100
-  dataOrigin: DataOrigin;
+  happinessIndex: number; // 0 to 100
 }
 
 export interface InfrastructureMetrics {
-  highwayDensityKmPer1000SqKm: number;
+  highwayLengthKm: number;
+  railwayLengthKm: number;
+  powerCapacityMW: number;
   powerGridReliabilityIndex: number; // 0 to 100
-  portAccessType: 'COASTAL_PORT' | 'DRY_PORT_TRANSIT';
-  portTransitFeeMonthlyCrore: number;
-  internetBroadbandPenetration: number; // 0 to 1.0
-  industrialParksCount: number;
-  dataOrigin: DataOrigin;
+  portType: 'COASTAL_PORT' | 'DRY_PORT_TRANSIT';
+  airportCount: number;
+  isCoastal?: boolean;
 }
 
 export interface WaterMetrics {
   groundwaterStressLevel: 'SAFE' | 'SEMI_CRITICAL' | 'CRITICAL' | 'OVER_EXPLOITED';
   annualRainfallMm: number;
-  activeDamsCount: number;
+  damCount: number;
   reservoirStoragePercent: number; // 0 to 100
   irrigationCoveragePercent: number; // 0 to 100
   downstreamDischargeCusecs: number;
-  dataOrigin: DataOrigin;
+  groundwaterStressRatio?: number;
+  reservoirCapacityTmc?: number;
+  storagePercent?: number;
+  majorRivers?: string[];
 }
 
 export interface PoliticalMetrics {
   rulingPartyName: string;
   chiefMinisterName: string;
-  governingApprovalPercent: number; // 0 to 100
-  monthsUntilNextElection: number;   // 0 to 60 (5 years)
+  governingApprovalPercent: number;
+  monthsUntilNextElection: number;
   termsServed: number;
 }
 
+// ----------------- TRANSPORT & TRAINS -----------------
+export type TrainType = 'FREIGHT_HEAVY' | 'FREIGHT_CONTAINER' | 'PASSENGER_EXPRESS' | 'PASSENGER_REGIONAL';
+
+export interface TrainConfig {
+  type: TrainType;
+  name: string;
+  purchaseCostUSD: number;
+  operatingCostPer100KmUSD: number;
+  maintenanceCostPerMonthUSD: number;
+  cargoCapacityUnits: number;
+  passengerCapacity: number;
+  speedKmH: number;
+  revenuePerCargoUnitPer100KmUSD: number;
+  revenuePerPassengerPer100KmUSD: number;
+}
+
+export interface TrainRoute {
+  id: string;
+  name: string;
+  trainType: TrainType;
+  originState: TerritoryCode;
+  destinationState: TerritoryCode;
+  originCity: string;
+  destinationCity: string;
+  distanceKm: number;
+  activeTrainsCount: number;
+  isInterstate: boolean;
+  cargoCarriedMonthlyUnits: number;
+  passengersCarriedMonthly: number;
+  monthlyRevenueUSD: number;
+  monthlyOperatingCostUSD: number;
+  monthlyMaintenanceCostUSD: number;
+  monthlyProfitUSD: number;
+}
+
+// ----------------- BUILDINGS & DEVELOPMENT -----------------
+export type BuildingCategory =
+  | 'FACTORY'
+  | 'FARM'
+  | 'POWER_PLANT'
+  | 'MINE'
+  | 'UNIVERSITY'
+  | 'RESEARCH_CENTER'
+  | 'HOSPITAL'
+  | 'SCHOOL'
+  | 'RAILWAY_DEPOT'
+  | 'DAM'
+  | 'SEAPORT'
+  | 'RESIDENTIAL';
+
+export interface BuildingDefinition {
+  type: BuildingCategory;
+  name: string;
+  description: string;
+  constructionCostUSD: number;
+  constructionTimeTicks: number; // in months
+  monthlyOperatingExpenseUSD: number;
+  requiredPowerMW: number;
+  requiredWater: boolean;
+  requiresCoastal: boolean;
+  requiresRiver: boolean;
+  monthlyGdpValueAddedUSD: number;
+  employmentProvided: number;
+  happinessBonus: number;
+}
+
+export interface StateBuildingInstance {
+  id: string;
+  type: BuildingCategory;
+  isUnderConstruction: boolean;
+  ticksRemaining: number;
+  totalTicks: number;
+  healthPercent: number;
+}
+
+// ----------------- FULL STATE PROFILE -----------------
 export interface StateProfile {
   code: TerritoryCode;
   name: string;
   isUnionTerritory: boolean;
+  isUT?: boolean;
   capital: string;
+  majorCities: string[];
   areaSqKm: number;
   majorRivers: string[];
   neighboringStates: TerritoryCode[];
+  
   economy: EconomyMetrics;
   demographics: DemographicMetrics;
   infrastructure: InfrastructureMetrics;
   water: WaterMetrics;
   politics: PoliticalMetrics;
-  researchScore: number;       // 0 to 100
-  defenseContribution: number; // 0 to 100 (recruitment, defense manufacturing, civil defense)
-  industryOutputIndex: number; // 0 to 100
-  agricultureOutputIndex: number; // 0 to 100
-  naturalResourcesIndex: number;  // 0 to 100
-  tradeVolumeIndex: number;       // 0 to 100
+  
+  routes: TrainRoute[];
+  buildings: StateBuildingInstance[];
+
+  // Scores 0-100 for thematic map visualizations
+  researchScore: number;
+  defenseContribution: number;
+  industryOutputIndex: number;
+  agricultureOutputIndex: number;
+  naturalResourcesIndex: number;
+  tradeVolumeIndex: number;
 }
 
+// ----------------- GAME CLOCK & STATE -----------------
 export interface GameSimulationClock {
   currentTick: number; // 1 tick = 1 month
   currentYear: number;
-  currentMonth: number; // 1 = January, 12 = December
+  currentMonth: number; // 1..12
   isPaused: boolean;
+  speed: GameSpeed;
   tickRateMs: number;
 }
 
 export interface GameState {
   version: string;
-  selectedPlayerState: IndianStateCode;
+  phase: GamePhase;
+  selectedPlayerState: TerritoryCode;
+  inspectedState: TerritoryCode;
   clock: GameSimulationClock;
   states: Record<TerritoryCode, StateProfile>;
+  globalMarketPrices: {
+    freightCargoUnitUSD: number;
+    passengerKmUSD: number;
+    powerMWhUSD: number;
+    rawMaterialsUnitUSD: number;
+  };
 }
 
 export type PlayerAction =
-  | { type: 'ADJUST_TAX_RATES'; stateCode: IndianStateCode; sgstAdjustment: number; stampDutyAdjustment: number }
-  | { type: 'ALLOCATE_BUDGET'; stateCode: IndianStateCode; capexShare: number; welfareShare: number }
-  | { type: 'CONSTRUCT_INFRASTRUCTURE'; stateCode: IndianStateCode; project: 'DAM' | 'HIGHWAY' | 'SOLAR_PARK' | 'INDUSTRIAL_CORRIDOR' }
-  | { type: 'INTER_STATE_AGREEMENT'; fromState: IndianStateCode; toState: TerritoryCode; agreementType: 'WATER_SHARING' | 'PORT_TRANSIT' | 'POWER_TRADING' }
-  | { type: 'PAUSE_SIMULATION' }
-  | { type: 'RESUME_SIMULATION' }
-  | { type: 'SET_TICK_RATE'; rateMs: number };
+  | { type: 'SELECT_STATE_TO_PLAY'; stateCode: TerritoryCode }
+  | { type: 'SET_INSPECTED_STATE'; stateCode: TerritoryCode }
+  | { type: 'SET_GAME_PHASE'; phase: GamePhase }
+  | { type: 'SET_GAME_SPEED'; speed: GameSpeed }
+  | { type: 'TOGGLE_PAUSE' }
+  | { type: 'UPDATE_TAX_POLICY'; stateCode: TerritoryCode; taxPolicy: TaxPolicySettings }
+  | { type: 'PURCHASE_TRAIN_ROUTE'; stateCode: TerritoryCode; fromCity: string; toCity: string; trainType: TrainType; activeTrainsCount: number; distanceKm: number }
+  | { type: 'COMMENCE_BUILDING_CONSTRUCTION'; stateCode: TerritoryCode; buildingType: BuildingCategory }
+  | { type: 'REBALANCE_PUBLIC_BUDGET'; stateCode: TerritoryCode; publicInvestmentShare: number; welfareShare: number };

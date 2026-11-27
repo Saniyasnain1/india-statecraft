@@ -40,8 +40,8 @@ export const MapModeBar: React.FC<MapModeBarProps> = ({ activeMode, onSelectMode
   const modesList = Object.keys(MAP_MODES) as MapMode[];
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-      <div className="glass-panel rounded-2xl p-1.5 flex items-center gap-1 shadow-2xl max-w-[95vw] overflow-x-auto">
+    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+      <div className="glass-panel rounded-2xl p-1 flex items-center gap-1 shadow-2xl max-w-[95vw] overflow-x-auto bg-slate-950/80">
         {modesList.map((modeKey) => {
           const config = MAP_MODES[modeKey];
           const isActive = activeMode === modeKey;

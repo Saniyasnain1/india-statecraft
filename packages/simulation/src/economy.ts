@@ -1,83 +1,149 @@
-import { EconomyMetrics, BudgetBreakdown } from '@india-statecraft/shared-types';
+import {
+  EconomyMetrics,
+  BudgetBreakdownUSD,
+  StateBuildingInstance,
+  TrainRoute,
+} from '@india-statecraft/shared-types';
+import { BUILDING_DEFINITIONS } from '@india-statecraft/game-data';
 
 /**
  * Steps the state economy forward by one monthly tick.
- * Respects Indian constitutional fiscal rules:
- * - No personal income tax.
- * - Revenue from SGST, State Excise, Stamp Duty, Motor Vehicle Tax, Electricity Duty, and Central Transfers.
- * - Value-added GSDP expansion.
+ * Universal Currency: USD ($)
+ *
+ * Value-Added GDP Method:
+ * Net monthly GDP = Base consumption + Value added from operational buildings + Transport throughput
+ * Tax Yield: Calculated strictly from defined tax policy percentages.
  */
 export function stepEconomy(
   prevEconomy: EconomyMetrics,
+  buildings: StateBuildingInstance[],
+  routes: TrainRoute[],
   infrastructureScore: number,
   isMonsoonMonth: boolean
 ): EconomyMetrics {
-  const prevBudget = prevEconomy.budget;
+  const taxPolicy = prevEconomy.taxPolicy;
 
-  // 1. GSDP monthly expansion based on capital expenditure, infrastructure quality, and seasonal effects
-  const capexBonus = Math.min(0.005, (prevBudget.capitalExpenditure / prevEconomy.gsdpNominalCrore) * 1.5);
-  const infraMultiplier = (infrastructureScore / 100) * 0.003;
-  const seasonalAgriBoost = isMonsoonMonth ? 0.001 : 0.0002;
-  const monthlyGrowthRate = 0.004 + capexBonus + infraMultiplier + seasonalAgriBoost; // ~6-8% annual equivalent
+  // 1. Calculate building outputs & operating expenses from operational buildings
+  let monthlyBuildingGdpValueAddedUSD = 0;
+  let monthlyBuildingOperatingExpensesUSD = 0;
 
-  const nextGsdp = Math.round(prevEconomy.gsdpNominalCrore * (1 + monthlyGrowthRate));
+  for (const b of buildings) {
+    if (!b.isUnderConstruction) {
+      const def = BUILDING_DEFINITIONS[b.type];
+      if (def) {
+        monthlyBuildingGdpValueAddedUSD += def.monthlyGdpValueAddedUSD;
+        monthlyBuildingOperatingExpensesUSD += def.monthlyOperatingExpenseUSD;
+      }
+    }
+  }
 
-  // 2. State Own Tax Revenue (SOTR) calculations
-  // SGST grows with nominal consumption and industrial activity
-  const nextSgst = Math.round(prevBudget.sgst * (1 + monthlyGrowthRate * 1.05));
-  const nextExcise = Math.round(prevBudget.stateExcise * 1.002);
-  const nextStamp = Math.round(prevBudget.stampDutyRegistration * (1 + monthlyGrowthRate));
-  const nextVehicle = Math.round(prevBudget.motorVehicleTax * 1.003);
-  const nextElectricity = Math.round(prevBudget.electricityDuty * (1 + monthlyGrowthRate * 0.8));
-  const nextNonTax = Math.round(prevBudget.nonTaxRevenue * 1.002);
-  const nextUnionDevolution = Math.round(prevBudget.unionDevolutionAndGrants * 1.003);
+  // 2. Transport profit contribution
+  let totalTransportProfitsUSD = 0;
+  for (const r of routes) {
+    totalTransportProfitsUSD += r.monthlyProfitUSD;
+  }
+
+  // 3. GSDP Growth Rate
+  // Driven by investment share, infrastructure score, tax burden effect
+  // High business taxes (> 25%) depress growth; low taxes encourage capital formation
+  const taxDrag = (taxPolicy.businessTaxRate - 0.18) * 0.05;
+  const capexBonus = (prevEconomy.budget.publicInvestmentUSD / prevEconomy.gdpUSD) * 1.5;
+  const infraMultiplier = (infrastructureScore / 100) * 0.002;
+  const seasonalAgriBoost = isMonsoonMonth ? 0.0008 : 0.0002;
+
+  const monthlyBaseGrowth = 0.0045 + capexBonus + infraMultiplier + seasonalAgriBoost - taxDrag;
+  const effectiveMonthlyGrowth = Math.max(-0.01, monthlyBaseGrowth);
+
+  // New Nominal GDP (Value Added)
+  const nextGdp = Math.round(
+    prevEconomy.gdpUSD * (1 + effectiveMonthlyGrowth) + monthlyBuildingGdpValueAddedUSD
+  );
+  const monthlyGdp = nextGdp / 12;
+
+  // 4. Tax Revenues based on explicit policy rates
+  // Business tax
+  const businessTaxYield = Math.round(monthlyGdp * 0.20 * taxPolicy.businessTaxRate);
+  // Consumption tax (SGST)
+  const consumptionTaxYield = Math.round(monthlyGdp * 0.35 * taxPolicy.consumptionTaxRate);
+  // Property & Stamp duties
+  const propertyTaxYield = Math.round(monthlyGdp * 0.15 * taxPolicy.propertyTaxRate);
+  // State Excise
+  const exciseTaxYield = Math.round(monthlyGdp * 0.07 * taxPolicy.stateExciseTaxRate);
+  // Vehicle tax
+  const vehicleTaxYield = Math.round(monthlyGdp * 0.10 * taxPolicy.vehicleTaxRate);
+  // Electricity duty
+  const electricityTaxYield = Math.round(monthlyGdp * 0.08 * taxPolicy.electricityDutyRate);
+
+  // Central devolution (Union transfers based on formula)
+  const nextCentralTransfers = Math.round(prevEconomy.budget.centralTransfersUSD * 1.002);
 
   const totalMonthlyRevenue =
-    nextSgst + nextExcise + nextStamp + nextVehicle + nextElectricity + nextNonTax + nextUnionDevolution;
+    businessTaxYield +
+    consumptionTaxYield +
+    propertyTaxYield +
+    exciseTaxYield +
+    vehicleTaxYield +
+    electricityTaxYield +
+    nextCentralTransfers +
+    Math.max(0, totalTransportProfitsUSD);
 
-  // 3. Expenditures
-  // Committed expenditures: salaries, pensions, debt servicing
-  const annualInterestRate = 0.075; // ~7.5% state development loans (SDL)
-  const monthlyDebtService = Math.round((prevEconomy.stateDebtCrore * (annualInterestRate / 12)));
-  const nextSalaries = Math.round(prevBudget.salariesAndPensions * 1.002); // Dearness allowance (DA) adjustments
-  const nextWelfare = prevBudget.welfareAndSubsidies;
-  const nextCapEx = prevBudget.capitalExpenditure;
-  const nextMaintenance = Math.round(prevBudget.maintenanceOperations * 1.001);
+  // 5. Expenditures
+  const annualInterestRate = 0.065; // ~6.5% interest on state debt
+  const monthlyDebtService = Math.round(prevEconomy.debtUSD * (annualInterestRate / 12));
+  const publicSalaries = Math.round(prevEconomy.budget.publicSalariesUSD * 1.001);
+  const infraMaintenance = Math.round(
+    prevEconomy.budget.infrastructureMaintenanceUSD + monthlyBuildingOperatingExpensesUSD * 0.2
+  );
+  const welfareSubsidies = prevEconomy.budget.welfareAndSubsidiesUSD;
+  const publicInvestment = prevEconomy.budget.publicInvestmentUSD;
 
   const totalMonthlyExpenditure =
-    nextSalaries + monthlyDebtService + nextWelfare + nextCapEx + nextMaintenance;
+    publicSalaries +
+    infraMaintenance +
+    welfareSubsidies +
+    monthlyDebtService +
+    publicInvestment +
+    monthlyBuildingOperatingExpensesUSD;
 
-  // 4. Monthly fiscal balance & debt accumulation
-  const monthlyDeficit = totalMonthlyExpenditure - totalMonthlyRevenue;
-  const nextDebt = Math.max(0, Math.round(prevEconomy.stateDebtCrore + Math.max(0, monthlyDeficit)));
+  // 6. Net monthly balance & treasury accumulation
+  const monthlySurplus = totalMonthlyRevenue - totalMonthlyExpenditure;
+  const nextTreasury = prevEconomy.treasuryUSD + monthlySurplus;
 
-  // Annualized fiscal deficit ratio to GSDP
-  const annualizedDeficit = Math.max(0, monthlyDeficit) * 12;
-  const fiscalDeficitRatio = Number((annualizedDeficit / nextGsdp).toFixed(4));
+  // Debt changes if deficit is negative and treasury is depleted
+  let nextDebt = prevEconomy.debtUSD;
+  if (nextTreasury < 0) {
+    nextDebt += Math.abs(nextTreasury);
+  }
 
-  const updatedBudget: BudgetBreakdown = {
-    sgst: nextSgst,
-    stateExcise: nextExcise,
-    stampDutyRegistration: nextStamp,
-    motorVehicleTax: nextVehicle,
-    electricityDuty: nextElectricity,
-    nonTaxRevenue: nextNonTax,
-    unionDevolutionAndGrants: nextUnionDevolution,
-    salariesAndPensions: nextSalaries,
-    debtServicing: monthlyDebtService,
-    welfareAndSubsidies: nextWelfare,
-    capitalExpenditure: nextCapEx,
-    maintenanceOperations: nextMaintenance,
+  const updatedBudget: BudgetBreakdownUSD = {
+    businessTaxRevenueUSD: businessTaxYield,
+    consumptionTaxRevenueUSD: consumptionTaxYield,
+    propertyTaxRevenueUSD: propertyTaxYield,
+    exciseTaxRevenueUSD: exciseTaxYield,
+    vehicleTaxRevenueUSD: vehicleTaxYield,
+    electricityTaxRevenueUSD: electricityTaxYield,
+    transportProfitsUSD: totalTransportProfitsUSD,
+    centralTransfersUSD: nextCentralTransfers,
+    publicSalariesUSD: publicSalaries,
+    infrastructureMaintenanceUSD: infraMaintenance,
+    welfareAndSubsidiesUSD: welfareSubsidies,
+    debtServicingUSD: monthlyDebtService,
+    publicInvestmentUSD: publicInvestment,
   };
+
+  const annualizedGrowth = Number((effectiveMonthlyGrowth * 12).toFixed(4));
+  const perCapita = Math.round(nextGdp / (prevEconomy.gdpUSD / Math.max(1, prevEconomy.gdpPerCapitaUSD)));
 
   return {
     ...prevEconomy,
-    gsdpNominalCrore: nextGsdp,
-    monthlyRevenueCrore: totalMonthlyRevenue,
-    monthlyExpenditureCrore: totalMonthlyExpenditure,
-    fiscalDeficitGsdpRatio: fiscalDeficitRatio,
-    stateDebtCrore: nextDebt,
+    treasuryUSD: Math.round(nextTreasury),
+    gdpUSD: nextGdp,
+    gdpGrowthRate: annualizedGrowth,
+    gdpPerCapitaUSD: perCapita,
+    monthlyRevenueUSD: totalMonthlyRevenue,
+    monthlyExpenditureUSD: totalMonthlyExpenditure,
+    monthlySurplusUSD: monthlySurplus,
+    debtUSD: Math.round(nextDebt),
     budget: updatedBudget,
-    dataOrigin: 'SIMULATED_DYNAMIC',
   };
 }

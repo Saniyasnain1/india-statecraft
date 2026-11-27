@@ -4,6 +4,7 @@ import {
   MapMode,
   TerritoryCode,
   PlayerAction,
+  GameSpeed,
 } from '@india-statecraft/shared-types';
 import { createInitialGameState, stepSimulation } from '@india-statecraft/simulation';
 import { MapView } from './map/MapView';
@@ -13,8 +14,15 @@ import { MapLegend } from './components/MapLegend';
 import { StateDetailDrawer } from './components/StateDetailDrawer';
 import { WorldViewZoomControl } from './components/WorldViewZoomControl';
 import { AuthModal } from './components/AuthModal';
+import { StateSelectionScreen } from './components/StateSelectionScreen';
+import { StrategyDock, ActivePanel } from './components/StrategyDock';
+import { GovernmentPanel } from './components/panels/GovernmentPanel';
+import { TransportPanel } from './components/panels/TransportPanel';
+import { IndustryPanel } from './components/panels/IndustryPanel';
+import { EconomyPanel } from './components/panels/EconomyPanel';
+import { ElectionsPanel } from './components/panels/ElectionsPanel';
 
-const LOCAL_STORAGE_SAVE_KEY = 'india_statecraft_save_v1';
+const LOCAL_STORAGE_SAVE_KEY = 'india_statecraft_save_v2';
 
 export const App: React.FC = () => {
   // 1. Initialize Game State (restore from local storage or create fresh)
@@ -22,17 +30,24 @@ export const App: React.FC = () => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_SAVE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed.states && parsed.states.MH?.economy?.gdpUSD) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn('Could not parse local save, creating fresh state:', e);
     }
-    return createInitialGameState('MH'); // Default starting state: Maharashtra
+    // Start fresh in STATE_SELECT phase
+    const fresh = createInitialGameState('MH');
+    fresh.phase = 'STATE_SELECT';
+    return fresh;
   });
 
   const [activeMode, setActiveMode] = useState<MapMode>('economy');
   const [inspectedStateCode, setInspectedStateCode] = useState<TerritoryCode>('MH');
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isAutosaving, setIsAutosaving] = useState<boolean>(false);
   const [zoomTarget, setZoomTarget] = useState<'WORLD' | 'INDIA' | 'STATE' | null>(null);
@@ -51,7 +66,7 @@ export const App: React.FC = () => {
 
   // 3. Simulation Tick Loop
   useEffect(() => {
-    if (gameState.clock.isPaused) return;
+    if (gameState.clock.isPaused || gameState.phase === 'STATE_SELECT') return;
 
     const intervalId = setInterval(() => {
       const { nextState, electionResults } = stepSimulation(stateRef.current);
@@ -65,10 +80,11 @@ export const App: React.FC = () => {
     }, gameState.clock.tickRateMs);
 
     return () => clearInterval(intervalId);
-  }, [gameState.clock.isPaused, gameState.clock.tickRateMs]);
+  }, [gameState.clock.isPaused, gameState.clock.tickRateMs, gameState.phase]);
 
-  // 4. Local Guest Auto-Save Loop (Runs every 10 seconds or on state changes)
+  // 4. Local Guest Auto-Save Loop
   useEffect(() => {
+    if (gameState.phase === 'STATE_SELECT') return;
     const saveTimer = setTimeout(() => {
       setIsAutosaving(true);
       try {
@@ -78,22 +94,18 @@ export const App: React.FC = () => {
       } finally {
         setTimeout(() => setIsAutosaving(false), 300);
       }
-    }, 1000);
+    }, 1500);
 
     return () => clearTimeout(saveTimer);
   }, [gameState]);
 
   // Handlers
   const handleTogglePause = () => {
-    if (gameState.clock.isPaused) {
-      dispatchAction({ type: 'RESUME_SIMULATION' });
-    } else {
-      dispatchAction({ type: 'PAUSE_SIMULATION' });
-    }
+    dispatchAction({ type: 'TOGGLE_PAUSE' });
   };
 
-  const handleSetSpeed = (rateMs: number) => {
-    dispatchAction({ type: 'SET_TICK_RATE', rateMs });
+  const handleSetSpeed = (speed: GameSpeed) => {
+    dispatchAction({ type: 'SET_GAME_SPEED', speed });
   };
 
   const handleSelectStateOnMap = (code: TerritoryCode) => {
@@ -101,23 +113,42 @@ export const App: React.FC = () => {
     setIsDrawerOpen(true);
   };
 
-  const inspectedStateProfile = gameState.states[inspectedStateCode];
-  const playerControlledStateProfile = gameState.states[gameState.selectedPlayerState];
+  const handleSelectStateToPlay = (code: TerritoryCode) => {
+    dispatchAction({ type: 'SELECT_STATE_TO_PLAY', stateCode: code });
+    setInspectedStateCode(code);
+    dispatchAction({ type: 'SET_GAME_PHASE', phase: 'PLAYING' });
+  };
+
+  const handleSpectate = () => {
+    dispatchAction({ type: 'SET_GAME_PHASE', phase: 'PLAYING' });
+  };
+
+  const inspectedStateProfile = gameState.states[inspectedStateCode] || gameState.states['MH'];
+  const playerControlledStateProfile = gameState.states[gameState.selectedPlayerState] || gameState.states['MH'];
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans">
-      {/* 1. Header HUD */}
+      {/* 1. Pre-Game State Selection Screen */}
+      {gameState.phase === 'STATE_SELECT' && (
+        <StateSelectionScreen
+          states={gameState.states}
+          onSelectStateToPlay={handleSelectStateToPlay}
+          onSpectate={handleSpectate}
+        />
+      )}
+
+      {/* 2. Top Header HUD */}
       <HeaderHUD
         clock={gameState.clock}
-        selectedStateCode={gameState.selectedPlayerState}
-        selectedStateName={playerControlledStateProfile.name}
+        playerState={playerControlledStateProfile}
         onTogglePause={handleTogglePause}
         onSetSpeed={handleSetSpeed}
+        onOpenStateSelect={() => dispatchAction({ type: 'SET_GAME_PHASE', phase: 'STATE_SELECT' })}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         isAutosaving={isAutosaving}
       />
 
-      {/* 2. World / Subcontinent / State Camera Switcher */}
+      {/* 3. Camera / Zoom Switcher */}
       <WorldViewZoomControl
         onZoomToWorld={() => setZoomTarget('WORLD')}
         onZoomToIndia={() => setZoomTarget('INDIA')}
@@ -125,7 +156,7 @@ export const App: React.FC = () => {
         selectedStateName={inspectedStateProfile.name}
       />
 
-      {/* 3. The Central MapLibre GL Map */}
+      {/* 4. Central Strategy Map (MapLibre GL) */}
       <MapView
         states={gameState.states}
         activeMode={activeMode}
@@ -135,23 +166,77 @@ export const App: React.FC = () => {
         onZoomComplete={() => setZoomTarget(null)}
       />
 
-      {/* 4. Dynamic Map Mode Switcher (12 Modes) */}
+      {/* 5. Thematic Map Modes Bar (12 Modes) */}
       <MapModeBar activeMode={activeMode} onSelectMode={setActiveMode} />
 
-      {/* 5. Thematic Map Legend */}
+      {/* 6. Thematic Map Legend */}
       <MapLegend mode={activeMode} />
 
-      {/* 6. Chief Minister State Drawer */}
+      {/* 7. Strategy Dock (Bottom Bar) */}
+      <StrategyDock
+        activePanel={activePanel}
+        onTogglePanel={(p) => setActivePanel(p)}
+      />
+
+      {/* 8. Strategy Panels */}
+      {activePanel === 'GOVERNMENT' && (
+        <GovernmentPanel
+          stateProfile={playerControlledStateProfile}
+          isPlayerControlled={true}
+          onClose={() => setActivePanel(null)}
+          onDispatchAction={dispatchAction}
+        />
+      )}
+
+      {activePanel === 'TRANSPORT' && (
+        <TransportPanel
+          stateProfile={playerControlledStateProfile}
+          isPlayerControlled={true}
+          onClose={() => setActivePanel(null)}
+          onDispatchAction={dispatchAction}
+        />
+      )}
+
+      {activePanel === 'INDUSTRY' && (
+        <IndustryPanel
+          stateProfile={playerControlledStateProfile}
+          isPlayerControlled={true}
+          onClose={() => setActivePanel(null)}
+          onDispatchAction={dispatchAction}
+        />
+      )}
+
+      {activePanel === 'ECONOMY' && (
+        <EconomyPanel
+          stateProfile={playerControlledStateProfile}
+          isPlayerControlled={true}
+          onClose={() => setActivePanel(null)}
+          onDispatchAction={dispatchAction}
+        />
+      )}
+
+      {activePanel === 'ELECTIONS' && (
+        <ElectionsPanel
+          stateProfile={playerControlledStateProfile}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
+
+      {/* 9. State Detail Drawer (when inspecting any state on the map) */}
       {isDrawerOpen && inspectedStateProfile && (
         <StateDetailDrawer
           stateProfile={inspectedStateProfile}
           isPlayerControlled={inspectedStateCode === gameState.selectedPlayerState}
           onClose={() => setIsDrawerOpen(false)}
           onDispatchAction={dispatchAction}
+          onOpenPanel={(panel) => {
+            setIsDrawerOpen(false);
+            setActivePanel(panel);
+          }}
         />
       )}
 
-      {/* 7. Auth & Save Sync Modal */}
+      {/* 10. Auth & Cloud Sync Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

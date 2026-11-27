@@ -7,76 +7,89 @@ export interface MapModeConfig {
   unit: string;
   minVal: number;
   maxVal: number;
-  colorStops: [number, string][]; // [normalized 0..1, hex color]
+  colorStops: [number, string][];
   getValue: (state: StateProfile) => number;
   formatValue: (val: number) => string;
+}
+
+export function formatUSD(val: number): string {
+  if (Math.abs(val) >= 1_000_000_000) {
+    return `$${(val / 1_000_000_000).toFixed(1)}B`;
+  }
+  if (Math.abs(val) >= 1_000_000) {
+    return `$${(val / 1_000_000).toFixed(1)}M`;
+  }
+  if (Math.abs(val) >= 1_000) {
+    return `$${(val / 1_000).toFixed(0)}K`;
+  }
+  return `$${val.toLocaleString('en-US')}`;
 }
 
 export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   terrain: {
     id: 'terrain',
     label: 'Terrain',
-    description: 'Physical geography, river basins, mountain ranges, and natural biomes.',
+    description: 'Physical topography, river basins, mountain ranges, and natural biomes.',
     unit: 'Topography',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#d4e6b5'], // Plains
-      [0.3, '#88b04b'], // Forest
-      [0.6, '#bcaaa4'], // Plateaus / Hills
-      [0.85, '#8d6e63'], // High mountains
-      [1.0, '#ffffff'], // Snow / Glaciers
+      [0.0, '#3a506b'], // Coastal plains
+      [0.3, '#2a9d8f'], // Forested plains
+      [0.6, '#e9c46a'], // Deccan plateau
+      [0.85, '#f4a261'], // Mountain ranges
+      [1.0, '#e76f51'], // Himalayan peaks
     ],
     getValue: () => 50,
     formatValue: () => 'Physical Topography',
   },
   economy: {
     id: 'economy',
-    label: 'Economy (GSDP)',
-    description: 'Gross State Domestic Product in Crore INR (Value Added).',
-    unit: '₹ Cr',
-    minVal: 10000,
-    maxVal: 4000000,
+    label: 'GDP ($)',
+    description: 'Gross State Domestic Product in USD (Value Added method).',
+    unit: 'USD ($)',
+    minVal: 1_000_000_000,
+    maxVal: 450_000_000_000,
     colorStops: [
-      [0.0, '#e8f5e9'],
-      [0.2, '#a5d6a7'],
-      [0.5, '#4caf50'],
-      [0.8, '#2e7d32'],
-      [1.0, '#1b5e20'],
+      [0.0, '#132a13'],
+      [0.2, '#31572c'],
+      [0.5, '#4f772d'],
+      [0.8, '#90a955'],
+      [1.0, '#ecf39e'],
     ],
-    getValue: (s) => s.economy.gsdpNominalCrore,
-    formatValue: (v) => `₹${(v / 1000).toLocaleString('en-IN', { maximumFractionDigits: 1 })}k Cr`,
+    getValue: (s) => s.economy.gdpUSD,
+    formatValue: (v) => formatUSD(v),
   },
   population: {
     id: 'population',
     label: 'Population',
     description: 'Total population residing within state borders.',
-    unit: 'People',
-    minVal: 500000,
-    maxVal: 250000000,
+    unit: 'Citizens',
+    minVal: 500_000,
+    maxVal: 250_000_000,
     colorStops: [
-      [0.0, '#fff9c4'],
-      [0.25, '#ffe082'],
-      [0.5, '#ffb74d'],
-      [0.75, '#ff7043'],
-      [1.0, '#b71c1c'],
+      [0.0, '#3d0c02'],
+      [0.25, '#780000'],
+      [0.5, '#c1121f'],
+      [0.75, '#fdf0d5'],
+      [1.0, '#669bbc'],
     ],
     getValue: (s) => s.demographics.population,
-    formatValue: (v) => `${(v / 1000000).toFixed(1)}M`,
+    formatValue: (v) => `${(v / 1_000_000).toFixed(1)}M`,
   },
   industry: {
     id: 'industry',
     label: 'Industry',
-    description: 'Manufacturing capacity, industrial clusters, and SEZ density.',
+    description: 'Manufacturing capacity, SEZ density, and factory output index.',
     unit: 'Index (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#eceff1'],
-      [0.3, '#b0bec5'],
-      [0.6, '#ff9800'],
-      [0.85, '#f57c00'],
-      [1.0, '#e65100'],
+      [0.0, '#1b263b'],
+      [0.3, '#415a77'],
+      [0.6, '#778da9'],
+      [0.85, '#e0a96d'],
+      [1.0, '#fca311'],
     ],
     getValue: (s) => s.industryOutputIndex,
     formatValue: (v) => `${v}/100`,
@@ -84,33 +97,33 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   agriculture: {
     id: 'agriculture',
     label: 'Agriculture',
-    description: 'Agricultural output, foodgrain yield, and irrigated cropland.',
+    description: 'Foodgrain yield, irrigated cropland %, and agricultural output.',
     unit: 'Index (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#fffde7'],
-      [0.3, '#dce775'],
-      [0.6, '#9ccc65'],
-      [0.85, '#689f38'],
-      [1.0, '#33691e'],
+      [0.0, '#283618'],
+      [0.3, '#606c38'],
+      [0.6, '#dda15e'],
+      [0.85, '#bc6c25'],
+      [1.0, '#fefae0'],
     ],
     getValue: (s) => s.agricultureOutputIndex,
     formatValue: (v) => `${v}/100`,
   },
   naturalResources: {
     id: 'naturalResources',
-    label: 'Natural Resources',
-    description: 'Mineral deposits (coal, iron, bauxite) and renewable potential.',
+    label: 'Resources',
+    description: 'Mineral deposits (iron, bauxite, coal), solar, and wind potential.',
     unit: 'Index (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#efebe9'],
-      [0.3, '#bcaaa4'],
-      [0.6, '#8d6e63'],
-      [0.85, '#ff8f00'],
-      [1.0, '#bf360c'],
+      [0.0, '#2b2d42'],
+      [0.3, '#8d99ae'],
+      [0.6, '#edf2f4'],
+      [0.85, '#ef233c'],
+      [1.0, '#d90429'],
     ],
     getValue: (s) => s.naturalResourcesIndex,
     formatValue: (v) => `${v}/100`,
@@ -118,16 +131,16 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   infrastructure: {
     id: 'infrastructure',
     label: 'Infrastructure',
-    description: 'Highway density, grid reliability, and transit logistics connectivity.',
-    unit: 'Index (0-100)',
+    description: 'Power grid reliability, highway network, and railway transit density.',
+    unit: 'Score (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#e0f7fa'],
-      [0.3, '#80deea'],
-      [0.6, '#26c6da'],
-      [0.85, '#0097a7'],
-      [1.0, '#006064'],
+      [0.0, '#001219'],
+      [0.3, '#005f73'],
+      [0.6, '#0a9396'],
+      [0.85, '#94d2bd'],
+      [1.0, '#e9d8a6'],
     ],
     getValue: (s) => s.infrastructure.powerGridReliabilityIndex,
     formatValue: (v) => `${v}/100`,
@@ -135,16 +148,16 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   happiness: {
     id: 'happiness',
     label: 'Happiness & HDI',
-    description: 'Quality of life, public health, literacy, and citizen satisfaction.',
+    description: 'Public health, literacy, employment rate, and citizen approval.',
     unit: 'Index (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#fce4ec'],
-      [0.3, '#f48fb1'],
-      [0.6, '#ec407a'],
-      [0.85, '#26a69a'],
-      [1.0, '#004d40'],
+      [0.0, '#582f0e'],
+      [0.3, '#7f4f24'],
+      [0.6, '#936639'],
+      [0.85, '#a68a64'],
+      [1.0, '#b6ad90'],
     ],
     getValue: (s) => s.demographics.happinessIndex,
     formatValue: (v) => `${v}/100`,
@@ -152,33 +165,33 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   research: {
     id: 'research',
     label: 'Research & Tech',
-    description: 'Academic institutions, patent filings, and technology incubators.',
+    description: 'Academic universities, tech hubs, and patent filings.',
     unit: 'Score (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#ede7f6'],
-      [0.3, '#b39ddb'],
-      [0.6, '#7e57c2'],
-      [0.85, '#512da8'],
-      [1.0, '#311b92'],
+      [0.0, '#10002b'],
+      [0.3, '#3c096c'],
+      [0.6, '#7b2cbf'],
+      [0.85, '#9d4edd'],
+      [1.0, '#e0aaff'],
     ],
     getValue: (s) => s.researchScore,
     formatValue: (v) => `${v}/100`,
   },
   militaryContribution: {
     id: 'militaryContribution',
-    label: 'Defense Contribution',
-    description: 'Armed forces recruitment, defense corridors, and strategic infrastructure.',
+    label: 'Defense Hub',
+    description: 'Armed forces recruitment, defense manufacturing, and border logistics.',
     unit: 'Score (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#f1f8e9'],
-      [0.3, '#c5e1a5'],
-      [0.6, '#7cb342'],
-      [0.85, '#455a64'],
-      [1.0, '#263238'],
+      [0.0, '#1f2421'],
+      [0.3, '#216869'],
+      [0.6, '#49a078'],
+      [0.85, '#9cc5a1'],
+      [1.0, '#dce1de'],
     ],
     getValue: (s) => s.defenseContribution,
     formatValue: (v) => `${v}/100`,
@@ -186,42 +199,39 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
   trade: {
     id: 'trade',
     label: 'Trade Volume',
-    description: 'Inter-state commerce, freight transit, and export throughput.',
+    description: 'Interstate rail freight, seaport throughput, and export shipments.',
     unit: 'Index (0-100)',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#e3f2fd'],
-      [0.3, '#90caf9'],
-      [0.6, '#42a5f5'],
-      [0.85, '#1976d2'],
-      [1.0, '#0d47a1'],
+      [0.0, '#03045e'],
+      [0.3, '#0077b6'],
+      [0.6, '#00b4d8'],
+      [0.85, '#90e0ef'],
+      [1.0, '#caf0f8'],
     ],
     getValue: (s) => s.tradeVolumeIndex,
     formatValue: (v) => `${v}/100`,
   },
   waterResources: {
     id: 'waterResources',
-    label: 'Water Resources',
-    description: 'Reservoir storage capacity %, annual rainfall, and groundwater health.',
-    unit: 'Reservoir %',
+    label: 'Water Security',
+    description: 'Reservoir storage capacity %, river flow, and groundwater level.',
+    unit: 'Storage %',
     minVal: 0,
     maxVal: 100,
     colorStops: [
-      [0.0, '#ffe0b2'],
-      [0.3, '#80deea'],
-      [0.6, '#4dd0e1'],
-      [0.85, '#00acc1'],
-      [1.0, '#006064'],
+      [0.0, '#d90429'], // Severe stress
+      [0.3, '#f77f00'],
+      [0.6, '#fcbf49'],
+      [0.85, '#0077b6'],
+      [1.0, '#00b4d8'], // Abundant water
     ],
     getValue: (s) => s.water.reservoirStoragePercent,
     formatValue: (v) => `${v}% Storage`,
   },
 };
 
-/**
- * Computes color interpolated for a given mode and value
- */
 export function getMapColorForValue(mode: MapMode, val: number): string {
   const config = MAP_MODES[mode];
   if (!config) return '#888888';
@@ -237,45 +247,97 @@ export function getMapColorForValue(mode: MapMode, val: number): string {
   return stops[stops.length - 1][1];
 }
 
-/**
- * Centroids for all Indian States & UTs for camera navigation and labeling
- */
 export const STATE_CENTROIDS: Record<TerritoryCode, [number, number]> = {
-  AP: [79.74, 15.91],
-  AR: [94.72, 28.21],
-  AS: [92.93, 26.20],
-  BR: [85.31, 25.09],
-  CG: [81.86, 21.27],
-  GA: [74.12, 15.29],
-  GJ: [71.19, 22.25],
-  HR: [76.08, 29.05],
-  HP: [77.17, 31.10],
-  JH: [85.27, 23.61],
-  KA: [75.71, 15.31],
-  KL: [76.27, 10.85],
-  MP: [78.65, 22.97],
-  MH: [75.71, 19.75],
-  MN: [93.90, 24.66],
-  ML: [91.36, 25.46],
-  MZ: [92.93, 23.16],
-  NL: [94.56, 26.15],
-  OD: [84.45, 20.95],
-  PB: [75.34, 31.14],
-  RJ: [74.21, 27.02],
-  SK: [88.51, 27.53],
-  TN: [78.65, 11.12],
-  TS: [79.01, 18.11],
-  TR: [91.98, 23.94],
-  UP: [80.94, 26.84],
-  UK: [79.01, 30.06],
-  WB: [87.85, 22.98],
-  // Union Territories
-  AN: [92.65, 11.74],
-  CH: [76.77, 30.73],
-  DNHDD: [72.93, 20.42],
-  DL: [77.10, 28.70],
-  JK: [74.79, 34.08],
-  LA: [77.57, 34.15],
-  LD: [72.63, 10.56],
-  PY: [79.80, 11.94],
+  AP: [80.2, 15.8],
+  AR: [94.5, 28.1],
+  AS: [92.9, 26.2],
+  BR: [85.5, 25.5],
+  CG: [81.8, 21.3],
+  GA: [74.0, 15.3],
+  GJ: [71.5, 22.3],
+  HR: [76.2, 29.1],
+  HP: [77.2, 31.8],
+  JH: [85.3, 23.6],
+  KA: [75.8, 14.8],
+  KL: [76.4, 10.4],
+  MP: [78.5, 23.2],
+  MH: [75.5, 19.5],
+  MN: [93.9, 24.7],
+  ML: [91.4, 25.5],
+  MZ: [92.9, 23.2],
+  NL: [94.4, 26.1],
+  OD: [84.5, 20.5],
+  PB: [75.4, 31.0],
+  RJ: [73.8, 26.6],
+  SK: [88.5, 27.5],
+  TN: [78.4, 11.0],
+  TS: [79.0, 17.8],
+  TR: [91.8, 23.8],
+  UP: [80.8, 27.0],
+  UK: [79.2, 30.1],
+  WB: [87.8, 23.2],
+  AN: [92.8, 11.6],
+  CH: [76.8, 30.7],
+  DNHDD: [72.9, 20.4],
+  DL: [77.1, 28.7],
+  JK: [74.8, 33.7],
+  LA: [77.6, 34.2],
+  LD: [72.6, 10.6],
+  PY: [79.8, 11.9],
 };
+
+// Strategic city coordinates for the game map
+export interface CityNode {
+  name: string;
+  stateCode: TerritoryCode;
+  coords: [number, number];
+  isCapital: boolean;
+  populationM: number;
+}
+
+export const MAJOR_CITIES: CityNode[] = [
+  { name: 'Mumbai', stateCode: 'MH', coords: [72.8777, 19.0760], isCapital: true, populationM: 21.0 },
+  { name: 'New Delhi', stateCode: 'DL', coords: [77.2090, 28.6139], isCapital: true, populationM: 20.5 },
+  { name: 'Bengaluru', stateCode: 'KA', coords: [77.5946, 12.9716], isCapital: true, populationM: 13.2 },
+  { name: 'Kolkata', stateCode: 'WB', coords: [88.3639, 22.5726], isCapital: true, populationM: 15.1 },
+  { name: 'Chennai', stateCode: 'TN', coords: [80.2707, 13.0827], isCapital: true, populationM: 11.5 },
+  { name: 'Hyderabad', stateCode: 'TS', coords: [78.4867, 17.3850], isCapital: true, populationM: 10.5 },
+  { name: 'Ahmedabad', stateCode: 'GJ', coords: [72.5714, 23.0225], isCapital: false, populationM: 8.6 },
+  { name: 'Pune', stateCode: 'MH', coords: [73.8567, 18.5204], isCapital: false, populationM: 7.2 },
+  { name: 'Surat', stateCode: 'GJ', coords: [72.8311, 21.1702], isCapital: false, populationM: 6.8 },
+  { name: 'Jaipur', stateCode: 'RJ', coords: [75.7873, 26.9124], isCapital: true, populationM: 4.1 },
+  { name: 'Lucknow', stateCode: 'UP', coords: [80.9462, 26.8467], isCapital: true, populationM: 3.8 },
+  { name: 'Bhopal', stateCode: 'MP', coords: [77.4126, 23.2599], isCapital: true, populationM: 2.5 },
+  { name: 'Patna', stateCode: 'BR', coords: [85.1376, 25.5941], isCapital: true, populationM: 2.6 },
+  { name: 'Chandigarh', stateCode: 'CH', coords: [76.7794, 30.7333], isCapital: true, populationM: 1.2 },
+  { name: 'Bhubaneswar', stateCode: 'OD', coords: [85.8245, 20.2961], isCapital: true, populationM: 1.1 },
+  { name: 'Thiruvananthapuram', stateCode: 'KL', coords: [76.9366, 8.5241], isCapital: true, populationM: 1.2 },
+  { name: 'Guwahati', stateCode: 'AS', coords: [91.7362, 26.1445], isCapital: false, populationM: 1.2 },
+  { name: 'Ranchi', stateCode: 'JH', coords: [85.3096, 23.3441], isCapital: true, populationM: 1.4 },
+  { name: 'Raipur', stateCode: 'CG', coords: [81.6296, 21.2514], isCapital: true, populationM: 1.5 },
+  { name: 'Dehradun', stateCode: 'UK', coords: [78.0322, 30.3165], isCapital: true, populationM: 0.9 },
+  { name: 'Shimla', stateCode: 'HP', coords: [77.1734, 31.1048], isCapital: true, populationM: 0.2 },
+  { name: 'Panaji', stateCode: 'GA', coords: [73.8278, 15.4909], isCapital: true, populationM: 0.15 },
+  { name: 'Srinagar', stateCode: 'JK', coords: [74.7973, 34.0837], isCapital: true, populationM: 1.5 },
+  { name: 'Leh', stateCode: 'LA', coords: [77.5771, 34.1526], isCapital: true, populationM: 0.05 },
+];
+
+// Major Indian Railway Corridors for map rendering
+export const RAILWAY_CORRIDORS: { fromCity: string; toCity: string; fromCoords: [number, number]; toCoords: [number, number] }[] = [
+  { fromCity: 'Mumbai', toCity: 'Pune', fromCoords: [72.8777, 19.0760], toCoords: [73.8567, 18.5204] },
+  { fromCity: 'Mumbai', toCity: 'Ahmedabad', fromCoords: [72.8777, 19.0760], toCoords: [72.5714, 23.0225] },
+  { fromCity: 'Ahmedabad', toCity: 'Jaipur', fromCoords: [72.5714, 23.0225], toCoords: [75.7873, 26.9124] },
+  { fromCity: 'Jaipur', toCity: 'New Delhi', fromCoords: [75.7873, 26.9124], toCoords: [77.2090, 28.6139] },
+  { fromCity: 'New Delhi', toCity: 'Chandigarh', fromCoords: [77.2090, 28.6139], toCoords: [76.7794, 30.7333] },
+  { fromCity: 'New Delhi', toCity: 'Lucknow', fromCoords: [77.2090, 28.6139], toCoords: [80.9462, 26.8467] },
+  { fromCity: 'Lucknow', toCity: 'Patna', fromCoords: [80.9462, 26.8467], toCoords: [85.1376, 25.5941] },
+  { fromCity: 'Patna', toCity: 'Kolkata', fromCoords: [85.1376, 25.5941], toCoords: [88.3639, 22.5726] },
+  { fromCity: 'Kolkata', toCity: 'Bhubaneswar', fromCoords: [88.3639, 22.5726], toCoords: [85.8245, 20.2961] },
+  { fromCity: 'Bhubaneswar', toCity: 'Chennai', fromCoords: [85.8245, 20.2961], toCoords: [80.2707, 13.0827] },
+  { fromCity: 'Chennai', toCity: 'Bengaluru', fromCoords: [80.2707, 13.0827], toCoords: [77.5946, 12.9716] },
+  { fromCity: 'Bengaluru', toCity: 'Hyderabad', fromCoords: [77.5946, 12.9716], toCoords: [78.4867, 17.3850] },
+  { fromCity: 'Hyderabad', toCity: 'Nagpur', fromCoords: [78.4867, 17.3850], toCoords: [79.0882, 21.1458] },
+  { fromCity: 'Nagpur', toCity: 'Bhopal', fromCoords: [79.0882, 21.1458], toCoords: [77.4126, 23.2599] },
+  { fromCity: 'Bhopal', toCity: 'New Delhi', fromCoords: [77.4126, 23.2599], toCoords: [77.2090, 28.6139] },
+  { fromCity: 'Chennai', toCity: 'Thiruvananthapuram', fromCoords: [80.2707, 13.0827], toCoords: [76.9366, 8.5241] },
+];

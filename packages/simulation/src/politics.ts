@@ -1,4 +1,4 @@
-import { PoliticalMetrics } from '@india-statecraft/shared-types';
+import { PoliticalMetrics, TaxPolicySettings } from '@india-statecraft/shared-types';
 
 export interface ElectionResult {
   occurred: boolean;
@@ -9,24 +9,38 @@ export interface ElectionResult {
 
 /**
  * Steps the political approval and 5-year electoral cycle.
+ * Taxes have direct gameplay trade-offs:
+ * - High consumption/business tax rates reduce public satisfaction.
+ * - Welfare and health/education investments increase approval.
  */
 export function stepPolitics(
   prevPolitics: PoliticalMetrics,
   happinessScore: number,
-  fiscalDeficitRatio: number,
-  unemploymentRate: number
+  unemploymentRate: number,
+  taxPolicy: TaxPolicySettings
 ): { politics: PoliticalMetrics; electionResult?: ElectionResult } {
-  // 1. Calculate approval swing based on public mood and governance metrics
+  // 1. Calculate approval swing based on public mood and tax burden
   let approvalDelta = 0;
-  if (happinessScore > 75) approvalDelta += 0.4;
-  else if (happinessScore < 55) approvalDelta -= 0.5;
+  if (happinessScore > 75) approvalDelta += 0.35;
+  else if (happinessScore < 55) approvalDelta -= 0.45;
 
-  if (unemploymentRate > 0.07) approvalDelta -= 0.3;
-  if (fiscalDeficitRatio > 0.04) approvalDelta -= 0.2; // Fiscal overextension penalty
+  if (unemploymentRate > 0.065) approvalDelta -= 0.30;
+  else if (unemploymentRate < 0.045) approvalDelta += 0.20;
 
-  const nextApproval = Math.max(10, Math.min(95, Math.round(prevPolitics.governingApprovalPercent + approvalDelta)));
+  // Excessive taxation backlash (e.g. if consumption tax > 18% or business tax > 24%)
+  if (taxPolicy.consumptionTaxRate > 0.18) {
+    approvalDelta -= (taxPolicy.consumptionTaxRate - 0.18) * 15;
+  }
+  if (taxPolicy.businessTaxRate > 0.25) {
+    approvalDelta -= (taxPolicy.businessTaxRate - 0.25) * 10;
+  }
 
-  // 2. Election clock tick
+  const nextApproval = Math.max(
+    10,
+    Math.min(95, Math.round(prevPolitics.governingApprovalPercent + approvalDelta))
+  );
+
+  // 2. Election clock (every 60 months = 5 years)
   let monthsLeft = prevPolitics.monthsUntilNextElection - 1;
   let terms = prevPolitics.termsServed;
   let electionResult: ElectionResult | undefined;
@@ -41,7 +55,7 @@ export function stepPolitics(
         ? `Victory! The administration secured a renewed 5-year democratic mandate with ${nextApproval}% approval.`
         : `Defeat! The ruling government failed to retain its majority, securing only ${nextApproval}% public approval.`,
     };
-    monthsLeft = 60; // Reset to 5 years
+    monthsLeft = 60; // Reset to 5-year mandate
     if (won) {
       terms += 1;
     }
