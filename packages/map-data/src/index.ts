@@ -25,41 +25,87 @@ export function formatUSD(val: number): string {
   return `$${val.toLocaleString('en-US')}`;
 }
 
+// Real geographic terrain / elevation scores (0-100) based on physical topography
+const TERRAIN_ELEVATION_SCORES: Record<TerritoryCode, number> = {
+  LA: 96, // Ladakh (High-altitude cold desert / Trans-Himalayas)
+  JK: 90, // Jammu & Kashmir (Greater Himalayas & Pir Panjal)
+  HP: 88, // Himachal Pradesh (Western Himalayas)
+  UK: 86, // Uttarakhand (Garhwal & Kumaon Himalayas)
+  SK: 92, // Sikkim (Kanchenjunga Himalayas)
+  AR: 85, // Arunachal Pradesh (Eastern Himalayas)
+  NL: 78, // Nagaland (Naga Hills)
+  MN: 75, // Manipur (Manipur Hills)
+  MZ: 74, // Mizoram (Mizo Hills)
+  ML: 72, // Meghalaya (Shillong Plateau)
+  AS: 35, // Assam (Brahmaputra Valley)
+  TR: 32, // Tripura (Low hill ridges & valleys)
+  KL: 60, // Kerala (Western Ghats & coastal strip)
+  MH: 52, // Maharashtra (Deccan basalt plateau & Sahyadri)
+  KA: 54, // Karnataka (Malnad & Deccan plateau)
+  TN: 48, // Tamil Nadu (Eastern Ghats & Nilgiris)
+  AP: 42, // Andhra Pradesh (Eastern Ghats & coastal delta)
+  TS: 46, // Telangana (Deccan semi-arid plateau)
+  MP: 50, // Madhya Pradesh (Vindhya & Satpura ranges)
+  CG: 52, // Chhattisgarh (Bastar plateau & Maikal hills)
+  JH: 55, // Jharkhand (Chota Nagpur plateau)
+  OD: 48, // Odisha (Eastern Ghats & Mahanadi delta)
+  GA: 45, // Goa (Konkan coast & Western Ghats edge)
+  RJ: 35, // Rajasthan (Aravalli range & Thar Desert)
+  GJ: 28, // Gujarat (Girnar hills, Kathiawar & Rann)
+  PB: 22, // Punjab (Fertile alluvial plain)
+  HR: 20, // Haryana (Indo-Gangetic plain)
+  DL: 18, // Delhi (Yamuna basin & northern ridge)
+  UP: 18, // Uttar Pradesh (Gangetic plain)
+  BR: 16, // Bihar (Middle Ganga alluvial basin)
+  WB: 14, // West Bengal (Bengal delta & Sundarbans, Darjeeling north)
+  CH: 22, // Chandigarh (Shivalik foothills plain)
+  AN: 30, // Andaman & Nicobar (Volcanic archipelago)
+  LD: 10, // Lakshadweep (Coral atolls)
+  PY: 12, // Puducherry (Coromandel coast)
+  DNHDD: 15, // Dadra, Nagar Haveli, Daman & Diu
+};
+
 export const MAP_MODES: Record<MapMode, MapModeConfig> = {
+  // 1. Terrain: Topographic physical relief
   terrain: {
     id: 'terrain',
-    label: 'Terrain',
-    description: 'Physical topography, river basins, mountain ranges, and natural biomes.',
-    unit: 'Topography',
-    minVal: 0,
-    maxVal: 100,
+    label: 'Terrain & Relief',
+    description: 'Physical topography, elevation relief, mountain ranges, plateaus, and river basins.',
+    unit: 'Elevation Index',
+    minVal: 10,
+    maxVal: 96,
     colorStops: [
-      [0.0, '#3a506b'], // Coastal plains
-      [0.3, '#2a9d8f'], // Forested plains
-      [0.6, '#e9c46a'], // Deccan plateau
-      [0.85, '#f4a261'], // Mountain ranges
-      [1.0, '#e76f51'], // Himalayan peaks
+      [0.0, '#2d6a4f'],  // Coastal plains & river deltas (green)
+      [0.25, '#74c69d'], // Low fertile plains
+      [0.45, '#d4a373'], // Deccan plateau / Aravalli hills (warm earth)
+      [0.70, '#a3704c'], // High mountain ranges & escarpments
+      [1.0, '#e8ecef'],  // Trans-Himalayan high alpine peaks (snow white)
     ],
-    getValue: () => 50,
-    formatValue: () => 'Physical Topography',
+    getValue: (s) => TERRAIN_ELEVATION_SCORES[s.code] || 40,
+    formatValue: (v) => `${v}/100 Topography`,
   },
+
+  // 2. Economy: Dummynation Golden Glow Heatmap
   economy: {
     id: 'economy',
-    label: 'GDP ($)',
-    description: 'Gross State Domestic Product in USD (Value Added method).',
+    label: 'Economy (GDP)',
+    description: 'Annual Gross State Domestic Product in USD. Represented via Dummynation Golden Glow heatmap.',
     unit: 'USD ($)',
-    minVal: 1_000_000_000,
-    maxVal: 450_000_000_000,
+    minVal: 1_000_000_000,     // $1B (Sikkim / Mizoram)
+    maxVal: 450_000_000_000,   // $450B (Maharashtra)
     colorStops: [
-      [0.0, '#132a13'],
-      [0.2, '#31572c'],
-      [0.5, '#4f772d'],
-      [0.8, '#90a955'],
-      [1.0, '#ecf39e'],
+      [0.0, '#1c170e'], // Very weak: dark, muted brownish charcoal
+      [0.15, '#453213'], // Weak: warm brownish bronze
+      [0.35, '#7c5817'], // Developing: deep amber bronze
+      [0.60, '#b88616'], // Average: rich golden yellow
+      [0.82, '#ebb118'], // Strong: bright golden amber
+      [1.0, '#ffe81a'],  // Powerhouse: intense incandescent golden glow
     ],
     getValue: (s) => s.economy.gdpUSD,
     formatValue: (v) => formatUSD(v),
   },
+
+  // 3. Population: Demographic Distribution
   population: {
     id: 'population',
     label: 'Population',
@@ -68,180 +114,238 @@ export const MAP_MODES: Record<MapMode, MapModeConfig> = {
     minVal: 500_000,
     maxVal: 250_000_000,
     colorStops: [
-      [0.0, '#3d0c02'],
-      [0.25, '#780000'],
-      [0.5, '#c1121f'],
-      [0.75, '#fdf0d5'],
-      [1.0, '#669bbc'],
+      [0.0, '#1e293b'],  // Sparse (<1M)
+      [0.15, '#3b82f6'], // Moderate
+      [0.40, '#0284c7'], // Large
+      [0.70, '#f97316'], // Very high
+      [1.0, '#dc2626'],  // Ultra high (>200M, e.g. UP)
     ],
     getValue: (s) => s.demographics.population,
     formatValue: (v) => `${(v / 1_000_000).toFixed(1)}M`,
   },
+
+  // 4. Industry: Manufacturing Output Index
   industry: {
     id: 'industry',
-    label: 'Industry',
-    description: 'Manufacturing capacity, SEZ density, and factory output index.',
+    label: 'Industry Output',
+    description: 'Industrial manufacturing capacity, factory clusters, SEZs, and production volume.',
     unit: 'Index (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    minVal: 10,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#1b263b'],
-      [0.3, '#415a77'],
-      [0.6, '#778da9'],
-      [0.85, '#e0a96d'],
-      [1.0, '#fca311'],
+      [0.0, '#181e29'],
+      [0.25, '#334155'],
+      [0.50, '#d97706'],
+      [0.75, '#f59e0b'],
+      [1.0, '#fef08a'],
     ],
     getValue: (s) => s.industryOutputIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Industry`,
   },
+
+  // 5. Agriculture: Foodgrain & Agri Output
   agriculture: {
     id: 'agriculture',
     label: 'Agriculture',
-    description: 'Foodgrain yield, irrigated cropland %, and agricultural output.',
+    description: 'Foodgrain harvest yield, irrigated cropland, and agricultural commodities output.',
     unit: 'Index (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    minVal: 15,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#283618'],
-      [0.3, '#606c38'],
-      [0.6, '#dda15e'],
-      [0.85, '#bc6c25'],
-      [1.0, '#fefae0'],
+      [0.0, '#14281d'],
+      [0.25, '#2d5a3f'],
+      [0.55, '#52b788'],
+      [0.80, '#95d5b2'],
+      [1.0, '#d8f3dc'],
     ],
     getValue: (s) => s.agricultureOutputIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Agri Yield`,
   },
+
+  // 6. Natural Resources: Minerals & Renewables
   naturalResources: {
     id: 'naturalResources',
     label: 'Resources',
-    description: 'Mineral deposits (iron, bauxite, coal), solar, and wind potential.',
+    description: 'Mineral deposits (iron ore, bauxite, coal), solar irradiance, and natural commodities.',
     unit: 'Index (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    minVal: 10,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#2b2d42'],
-      [0.3, '#8d99ae'],
-      [0.6, '#edf2f4'],
-      [0.85, '#ef233c'],
-      [1.0, '#d90429'],
+      [0.0, '#261c14'],
+      [0.25, '#5c4033'],
+      [0.55, '#a0522d'],
+      [0.80, '#cd853f'],
+      [1.0, '#ffdead'],
     ],
     getValue: (s) => s.naturalResourcesIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Mineral/Solar`,
   },
+
+  // 7. Infrastructure: Power Grid & Transport Reliability
   infrastructure: {
     id: 'infrastructure',
     label: 'Infrastructure',
-    description: 'Power grid reliability, highway network, and railway transit density.',
-    unit: 'Score (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    description: 'Electrical power grid reliability, highway network density, and logistical connectivity.',
+    unit: 'Reliability %',
+    minVal: 40,
+    maxVal: 98,
     colorStops: [
-      [0.0, '#001219'],
-      [0.3, '#005f73'],
-      [0.6, '#0a9396'],
-      [0.85, '#94d2bd'],
-      [1.0, '#e9d8a6'],
+      [0.0, '#2b1b17'],
+      [0.30, '#78350f'],
+      [0.60, '#0284c7'],
+      [0.85, '#38bdf8'],
+      [1.0, '#a7f3d0'],
     ],
     getValue: (s) => s.infrastructure.powerGridReliabilityIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}% Grid Reliability`,
   },
+
+  // 8. Happiness & HDI: Living Standards
   happiness: {
     id: 'happiness',
     label: 'Happiness & HDI',
-    description: 'Public health, literacy, employment rate, and citizen approval.',
-    unit: 'Index (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    description: 'Composite Human Development Index: literacy, public health, low unemployment, and approval.',
+    unit: 'HDI / Score',
+    minVal: 45,
+    maxVal: 92,
     colorStops: [
-      [0.0, '#582f0e'],
-      [0.3, '#7f4f24'],
-      [0.6, '#936639'],
-      [0.85, '#a68a64'],
-      [1.0, '#b6ad90'],
+      [0.0, '#3f1d38'],
+      [0.30, '#701a75'],
+      [0.60, '#a21caf'],
+      [0.85, '#e879f9'],
+      [1.0, '#fae8ff'],
     ],
     getValue: (s) => s.demographics.happinessIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 HDI Score`,
   },
+
+  // 9. Research & Technology: Innovation
   research: {
     id: 'research',
     label: 'Research & Tech',
-    description: 'Academic universities, tech hubs, and patent filings.',
-    unit: 'Score (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    description: 'Premier tertiary technical universities (IIT/NIT), research patents, and technology hubs.',
+    unit: 'Tech Index',
+    minVal: 10,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#10002b'],
-      [0.3, '#3c096c'],
-      [0.6, '#7b2cbf'],
-      [0.85, '#9d4edd'],
-      [1.0, '#e0aaff'],
+      [0.0, '#111827'],
+      [0.30, '#312e81'],
+      [0.60, '#4f46e5'],
+      [0.85, '#818cf8'],
+      [1.0, '#c7d2fe'],
     ],
     getValue: (s) => s.researchScore,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Innovation`,
   },
+
+  // 10. Military Contribution: Strategic Logistics
   militaryContribution: {
     id: 'militaryContribution',
     label: 'Defense Hub',
-    description: 'Armed forces recruitment, defense manufacturing, and border logistics.',
-    unit: 'Score (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    description: 'Defense industrial corridors, ordnance manufacturing facilities, and armed forces recruitment.',
+    unit: 'Defense Index',
+    minVal: 10,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#1f2421'],
-      [0.3, '#216869'],
-      [0.6, '#49a078'],
-      [0.85, '#9cc5a1'],
-      [1.0, '#dce1de'],
+      [0.0, '#1c1917'],
+      [0.30, '#44403c'],
+      [0.60, '#047857'],
+      [0.85, '#10b981'],
+      [1.0, '#6ee7b7'],
     ],
     getValue: (s) => s.defenseContribution,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Strategic`,
   },
+
+  // 11. Trade Volume: Interstate & Maritime
   trade: {
     id: 'trade',
     label: 'Trade Volume',
-    description: 'Interstate rail freight, seaport throughput, and export shipments.',
-    unit: 'Index (0-100)',
-    minVal: 0,
-    maxVal: 100,
+    description: 'Interstate rail freight, seaport container throughput, and foreign merchandise exports.',
+    unit: 'Trade Index',
+    minVal: 10,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#03045e'],
-      [0.3, '#0077b6'],
-      [0.6, '#00b4d8'],
-      [0.85, '#90e0ef'],
-      [1.0, '#caf0f8'],
+      [0.0, '#172554'],
+      [0.30, '#1d4ed8'],
+      [0.60, '#2563eb'],
+      [0.85, '#60a5fa'],
+      [1.0, '#dbeafe'],
     ],
     getValue: (s) => s.tradeVolumeIndex,
-    formatValue: (v) => `${v}/100`,
+    formatValue: (v) => `${v}/100 Logistics`,
   },
+
+  // 12. Water Security: Reservoir Storage & Basin Stress
   waterResources: {
     id: 'waterResources',
     label: 'Water Security',
-    description: 'Reservoir storage capacity %, river flow, and groundwater level.',
+    description: 'Reservoir storage capacity %, groundwater replenishment, and major perennial river discharge.',
     unit: 'Storage %',
-    minVal: 0,
-    maxVal: 100,
+    minVal: 15,
+    maxVal: 95,
     colorStops: [
-      [0.0, '#d90429'], // Severe stress
-      [0.3, '#f77f00'],
-      [0.6, '#fcbf49'],
-      [0.85, '#0077b6'],
-      [1.0, '#00b4d8'], // Abundant water
+      [0.0, '#7f1d1d'],  // Severe water stress (red)
+      [0.25, '#c2410c'], // High stress (orange)
+      [0.50, '#eab308'], // Moderate (yellow)
+      [0.75, '#0284c7'], // Adequate (cyan)
+      [1.0, '#06b6d4'],  // Abundant reservoir storage (luminous cyan)
     ],
     getValue: (s) => s.water.reservoirStoragePercent,
-    formatValue: (v) => `${v}% Storage`,
+    formatValue: (v) => `${v}% Storage Capacity`,
   },
 };
 
+// Smooth RGB color interpolation for silky heatmap gradients
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  const bigint = parseInt(clean, 16);
+  if (clean.length === 3) {
+    const r = ((bigint >> 8) & 0xf) * 17;
+    const g = ((bigint >> 4) & 0xf) * 17;
+    const b = (bigint & 0xf) * 17;
+    return [r, g, b];
+  }
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return [r, g, b];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return (
+    '#' +
+    [clamp(r), clamp(g), clamp(b)]
+      .map((x) => x.toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
+function interpolateHex(c1: string, c2: string, factor: number): string {
+  const [r1, g1, b1] = hexToRgb(c1);
+  const [r2, g2, b2] = hexToRgb(c2);
+  const r = r1 + (r2 - r1) * factor;
+  const g = g1 + (g2 - g1) * factor;
+  const b = b1 + (b2 - b1) * factor;
+  return rgbToHex(r, g, b);
+}
+
+/**
+ * Returns a smooth, continuous hex color from the defined gradient scale.
+ */
 export function getMapColorForValue(mode: MapMode, val: number): string {
   const config = MAP_MODES[mode];
-  if (!config) return '#888888';
-  const norm = Math.max(0, Math.min(1, (val - config.minVal) / (config.maxVal - config.minVal)));
+  if (!config) return '#334155';
+  const norm = Math.max(0, Math.min(1, (val - config.minVal) / Math.max(1, config.maxVal - config.minVal)));
   const stops = config.colorStops;
+
   for (let i = 0; i < stops.length - 1; i++) {
     const [t1, c1] = stops[i];
     const [t2, c2] = stops[i + 1];
     if (norm >= t1 && norm <= t2) {
-      return norm > (t1 + t2) / 2 ? c2 : c1;
+      const segmentRatio = (norm - t1) / Math.max(0.0001, t2 - t1);
+      return interpolateHex(c1, c2, segmentRatio);
     }
   }
   return stops[stops.length - 1][1];

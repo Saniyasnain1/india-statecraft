@@ -40,7 +40,8 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Dark high-contrast base style inspired by OpenFront.io / Dummynation
+    // Natural base style inspired by Dummynation:
+    // Surrounding countries, oceans and continents remain naturally visible without artificial black overlays.
     const baseMapStyle: maplibregl.StyleSpecification = {
       version: 8,
       sources: {
@@ -50,7 +51,7 @@ export const MapView: React.FC<MapViewProps> = ({
             'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
           ],
           tileSize: 256,
-          attribution: '© OpenStreetMap | India: Statecraft',
+          attribution: '© OpenStreetMap contributors | India: Statecraft',
         },
       },
       layers: [
@@ -58,7 +59,7 @@ export const MapView: React.FC<MapViewProps> = ({
           id: 'background',
           type: 'background',
           paint: {
-            'background-color': '#070b14',
+            'background-color': '#162338', // Natural deep ocean blue
           },
         },
         {
@@ -66,21 +67,22 @@ export const MapView: React.FC<MapViewProps> = ({
           type: 'raster',
           source: 'openmaptiles',
           paint: {
-            'raster-opacity': 0.22,
-            'raster-brightness-min': 0.05,
-            'raster-brightness-max': 0.45,
-            'raster-saturation': -0.9,
+            'raster-opacity': 0.92,
+            'raster-brightness-min': 0.08,
+            'raster-brightness-max': 0.98,
+            'raster-saturation': -0.15, // Subtle clean desaturation
           },
         },
       ],
     };
 
+    // Initial camera starts at regional world view
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: baseMapStyle,
-      center: [78.9629, 22.5937], // Center of India
-      zoom: 4.5,
-      minZoom: 2.5,
+      center: [78.9629, 21.0],
+      zoom: 3.4,
+      minZoom: 2.2,
       maxZoom: 10,
     });
 
@@ -105,30 +107,30 @@ export const MapView: React.FC<MapViewProps> = ({
           data: geojsonData,
         });
 
-        // 2. States Fill Layer (Thematic Choropleth)
+        // 2. States Fill Layer (Thematic Choropleth with Golden Glow / Heatmap)
         map.addLayer({
           id: 'states-fill',
           type: 'fill',
           source: 'india-states',
           paint: {
-            'fill-color': '#1e293b',
-            'fill-opacity': 0.88,
+            'fill-color': '#2e1c0c',
+            'fill-opacity': 0.82,
           },
         });
 
-        // 3. States Crisp Border Outlines
+        // 3. Crisp State Boundaries
         map.addLayer({
           id: 'states-borders',
           type: 'line',
           source: 'india-states',
           paint: {
             'line-color': '#38bdf8',
-            'line-width': 1.6,
-            'line-opacity': 0.75,
+            'line-width': 1.4,
+            'line-opacity': 0.80,
           },
         });
 
-        // 4. Selected State Glow / Highlight Border
+        // 4. Selected State Luminous Glow Outline
         map.addLayer({
           id: 'state-selected-outline',
           type: 'line',
@@ -140,7 +142,7 @@ export const MapView: React.FC<MapViewProps> = ({
           filter: ['==', 'code', selectedStateCode],
         });
 
-        // 5. Build Railway Network GeoJSON
+        // 5. Major Railway Network Lines
         const railwayGeoJSON: GeoJSON.FeatureCollection = {
           type: 'FeatureCollection',
           features: RAILWAY_CORRIDORS.map((c, i) => ({
@@ -159,20 +161,19 @@ export const MapView: React.FC<MapViewProps> = ({
           data: railwayGeoJSON,
         });
 
-        // Railway corridor line layer (dashed high-tech transit look)
         map.addLayer({
           id: 'railway-lines',
           type: 'line',
           source: 'railway-corridors',
           paint: {
             'line-color': '#fbbf24',
-            'line-width': 1.8,
-            'line-opacity': 0.65,
+            'line-width': 1.6,
+            'line-opacity': 0.70,
             'line-dasharray': [3, 2],
           },
         });
 
-        // 6. Strategic Major Cities Source & Points
+        // 6. Major Cities Nodes
         const citiesGeoJSON: GeoJSON.FeatureCollection = {
           type: 'FeatureCollection',
           features: MAJOR_CITIES.map((city, idx) => ({
@@ -196,7 +197,6 @@ export const MapView: React.FC<MapViewProps> = ({
           data: citiesGeoJSON,
         });
 
-        // Cities point dots
         map.addLayer({
           id: 'cities-points',
           type: 'circle',
@@ -209,12 +209,21 @@ export const MapView: React.FC<MapViewProps> = ({
           },
         });
 
-        // Click interaction on state
+        // Click interaction on state:
+        // Automatically selects state AND smoothly zooms into it!
         map.on('click', 'states-fill', (e) => {
           if (!e.features || e.features.length === 0) return;
           const code = e.features[0].properties?.code as TerritoryCode;
           if (code) {
             onSelectState(code);
+            const centroid = STATE_CENTROIDS[code];
+            if (centroid) {
+              map.flyTo({
+                center: centroid,
+                zoom: 6.0,
+                duration: 1000,
+              });
+            }
           }
         });
 
@@ -232,13 +241,13 @@ export const MapView: React.FC<MapViewProps> = ({
           const modeValFormatted = modeConfig ? modeConfig.formatValue(modeConfig.getValue(st)) : '';
 
           const html = `
-            <div style="background: rgba(10, 15, 29, 0.95); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #f8fafc; font-family: sans-serif; font-size: 11px; min-width: 140px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; padding: 8px 12px; color: #f8fafc; font-family: sans-serif; font-size: 11px; min-width: 140px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
               <div style="font-weight: 800; font-size: 12px; color: #f59e0b; display: flex; justify-content: space-between; align-items: center;">
                 <span>${st.name}</span>
                 <span style="font-size: 9px; color: #38bdf8; font-family: monospace; background: rgba(56, 189, 248, 0.15); padding: 1px 4px; border-radius: 3px;">${st.code}</span>
               </div>
               <div style="color: #94a3b8; margin-top: 4px;">Capital: <strong style="color: #e2e8f0;">${st.capital}</strong></div>
-              <div style="color: #94a3b8;">GDP: <strong style="color: #10b981; font-family: monospace;">${formatUSD(st.economy.gdpUSD)}</strong></div>
+              <div style="color: #94a3b8;">GDP: <strong style="color: #fbbf24; font-family: monospace;">${formatUSD(st.economy.gdpUSD)}</strong></div>
               <div style="color: #94a3b8;">Pop: <strong style="color: #e2e8f0; font-family: monospace;">${(st.demographics.population / 1000000).toFixed(1)}M</strong></div>
               <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 10px; color: #cbd5e1;">
                 ${modeConfig?.label || 'Mode'}: <strong style="color: #38bdf8; font-family: monospace;">${modeValFormatted}</strong>
@@ -272,6 +281,7 @@ export const MapView: React.FC<MapViewProps> = ({
   }, []);
 
   // Update choropleth colors dynamically when activeMode or states update
+  // Preserves camera position and selected state completely!
   useEffect(() => {
     if (!mapRef.current || !isLoadedRef.current) return;
     updateMapColors(mapRef.current, states, activeMode);
@@ -285,29 +295,29 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [selectedStateCode]);
 
-  // Handle camera zoom transitions
+  // Handle camera zoom transitions from navigation controls
   useEffect(() => {
     if (!mapRef.current || !zoomTarget) return;
 
     if (zoomTarget === 'WORLD') {
       mapRef.current.flyTo({
-        center: [78.9629, 20.5937],
-        zoom: 2.8,
-        duration: 1500,
+        center: [78.9629, 21.0],
+        zoom: 3.2,
+        duration: 1200,
       });
     } else if (zoomTarget === 'INDIA') {
       mapRef.current.flyTo({
         center: [78.9629, 22.5937],
-        zoom: 4.5,
-        duration: 1500,
+        zoom: 4.6,
+        duration: 1200,
       });
     } else if (zoomTarget === 'STATE') {
       const centroid = STATE_CENTROIDS[selectedStateCode];
       if (centroid) {
         mapRef.current.flyTo({
           center: centroid,
-          zoom: 6.2,
-          duration: 1200,
+          zoom: 6.0,
+          duration: 1000,
         });
       }
     }
@@ -336,7 +346,16 @@ function updateMapColors(
   }
 
   // Fallback color
-  matchExpr.push('#1e293b');
+  matchExpr.push('#334155');
 
   map.setPaintProperty('states-fill', 'fill-color', matchExpr);
+
+  // When in economy mode, border outlines glow warm gold
+  if (map.getLayer('states-borders')) {
+    map.setPaintProperty(
+      'states-borders',
+      'line-color',
+      activeMode === 'economy' ? '#f59e0b' : '#38bdf8'
+    );
+  }
 }

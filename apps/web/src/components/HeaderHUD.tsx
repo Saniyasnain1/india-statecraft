@@ -1,13 +1,15 @@
-import React from 'react';
-import { Play, Pause, RefreshCw, TrendingUp, DollarSign, Users, Award, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, RefreshCw, TrendingUp, DollarSign, Users, Award, ChevronRight, Clock } from 'lucide-react';
 import { GameSimulationClock, StateProfile, GameSpeed } from '@india-statecraft/shared-types';
 import { formatUSD } from '@india-statecraft/map-data';
 
 interface HeaderHUDProps {
   clock: GameSimulationClock;
   playerState: StateProfile;
+  monthProgress?: number; // 0.0 to 1.0 progress through current monthly tick
   onTogglePause: () => void;
   onSetSpeed: (speed: GameSpeed) => void;
+  onSetPacing?: (secondsPerYear: number) => void;
   onOpenStateSelect: () => void;
   onOpenAuth: () => void;
   isAutosaving: boolean;
@@ -21,16 +23,26 @@ const MONTH_NAMES = [
 export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   clock,
   playerState,
+  monthProgress = 0,
   onTogglePause,
   onSetSpeed,
+  onSetPacing,
   onOpenStateSelect,
   isAutosaving,
 }) => {
+  const [showPacingMenu, setShowPacingMenu] = useState(false);
   const { economy, demographics, politics } = playerState;
   const netMonthly = economy.monthlyRevenueUSD - economy.monthlyExpenditureUSD;
   const isNetPositive = netMonthly >= 0;
 
   const speeds: GameSpeed[] = [1, 2, 4, 8];
+
+  // Calculate current simulated day (1..30)
+  const currentDay = Math.min(30, Math.floor(monthProgress * 30) + 1);
+
+  // Time remaining in current month tick (in seconds)
+  const totalTickSeconds = clock.speed > 0 ? (clock.tickRateMs / 1000) : 0;
+  const secondsLeft = Math.max(0, Math.round(totalTickSeconds * (1 - monthProgress)));
 
   return (
     <header className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none gap-4">
@@ -128,15 +140,27 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
         </div>
       </div>
 
-      {/* Right: Simulation Clock & Speeds */}
+      {/* Right: Simulation Clock, Date & Speed Controls */}
       <div className="glass-panel rounded-2xl px-4 py-2 flex items-center gap-4 pointer-events-auto bg-slate-950/80 shadow-2xl border border-white/10">
-        {/* Date */}
-        <div className="text-right">
-          <div className="text-xs font-bold text-slate-100 font-mono tracking-wide">
-            {MONTH_NAMES[clock.currentMonth - 1]} {clock.currentYear}
+        {/* Date & Progress */}
+        <div className="text-right min-w-[110px]">
+          <div className="text-xs font-bold text-slate-100 font-mono tracking-wide flex items-center justify-end gap-1.5">
+            <span>{MONTH_NAMES[clock.currentMonth - 1]} {clock.currentYear}</span>
+            <span className="text-[9px] text-sky-400 font-semibold bg-sky-950/60 px-1 py-0.2 rounded border border-sky-800/40">
+              Day {currentDay}
+            </span>
           </div>
-          <div className="text-[9px] text-slate-400 font-mono">
-            Tick #{clock.currentTick} (1 Mo/Tick)
+
+          {/* Month Progress Bar */}
+          <div className="w-full bg-slate-900 rounded-full h-1 mt-1 overflow-hidden border border-white/5">
+            <div
+              className="bg-amber-400 h-full transition-all duration-200"
+              style={{ width: `${Math.round(monthProgress * 100)}%` }}
+            />
+          </div>
+
+          <div className="text-[8px] text-slate-400 font-mono mt-0.5">
+            {clock.isPaused ? 'Paused' : `${secondsLeft}s to month-end`}
           </div>
         </div>
 
@@ -171,6 +195,49 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
             );
           })}
         </div>
+
+        {/* Pacing Settings Toggle */}
+        {onSetPacing && (
+          <div className="relative">
+            <button
+              onClick={() => setShowPacingMenu(!showPacingMenu)}
+              title="Configure Time Pacing (Real Time per In-Game Year)"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Clock className="w-3.5 h-3.5" />
+            </button>
+
+            {showPacingMenu && (
+              <div className="absolute right-0 top-10 w-44 bg-slate-950/95 border border-white/15 rounded-xl p-2 shadow-2xl z-30 space-y-1 text-[11px] font-mono">
+                <div className="text-[9px] uppercase text-slate-400 px-2 py-1">Pacing Target:</div>
+                <button
+                  onClick={() => { onSetPacing(2160); setShowPacingMenu(false); }}
+                  className={`w-full text-left px-2 py-1.5 rounded ${
+                    clock.secondsPerYear1x === 2160 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:bg-slate-900'
+                  }`}
+                >
+                  36 min / year (Target)
+                </button>
+                <button
+                  onClick={() => { onSetPacing(1080); setShowPacingMenu(false); }}
+                  className={`w-full text-left px-2 py-1.5 rounded ${
+                    clock.secondsPerYear1x === 1080 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:bg-slate-900'
+                  }`}
+                >
+                  18 min / year (Brisk)
+                </button>
+                <button
+                  onClick={() => { onSetPacing(360); setShowPacingMenu(false); }}
+                  className={`w-full text-left px-2 py-1.5 rounded ${
+                    clock.secondsPerYear1x === 360 ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:bg-slate-900'
+                  }`}
+                >
+                  6 min / year (Fast)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Autosave pulse */}
         {isAutosaving && (

@@ -223,12 +223,14 @@ export interface StateProfile {
 
 // ----------------- GAME CLOCK & STATE -----------------
 export interface GameSimulationClock {
-  currentTick: number; // 1 tick = 1 month
+  currentTick: number; // Cumulative daily ticks
   currentYear: number;
   currentMonth: number; // 1..12
+  currentDay: number; // 1..30
   isPaused: boolean;
   speed: GameSpeed;
   tickRateMs: number;
+  secondsPerYear1x: number; // Configurable game-time pacing (default 2160 = 36 min/yr)
 }
 
 export interface GameState {
@@ -251,6 +253,7 @@ export type PlayerAction =
   | { type: 'SET_INSPECTED_STATE'; stateCode: TerritoryCode }
   | { type: 'SET_GAME_PHASE'; phase: GamePhase }
   | { type: 'SET_GAME_SPEED'; speed: GameSpeed }
+  | { type: 'SET_PACING_CONFIG'; secondsPerYear1x: number }
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'UPDATE_TAX_POLICY'; stateCode: TerritoryCode; taxPolicy: TaxPolicySettings }
   | { type: 'PURCHASE_TRAIN_ROUTE'; stateCode: TerritoryCode; fromCity: string; toCity: string; trainType: TrainType; activeTrainsCount: number; distanceKm: number }

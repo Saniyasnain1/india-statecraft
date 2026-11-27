@@ -4,12 +4,12 @@ import {
   StateProfile,
   TerritoryCode,
   IndianStateCode,
-  GameSpeed,
 } from '@india-statecraft/shared-types';
 import {
   ALL_TERRITORIES_DATA,
   BUILDING_DEFINITIONS,
   calculateTrainEconomics,
+  DEFAULT_GAME_TIME_CONFIG,
 } from '@india-statecraft/game-data';
 import { stepEconomy } from './economy.js';
 import { stepDemographics } from './demographics.js';
@@ -21,27 +21,11 @@ export interface StepOutput {
   electionResults: Partial<Record<TerritoryCode, ElectionResult>>;
 }
 
-export function getTickRateFromSpeed(speed: GameSpeed): number {
-  switch (speed) {
-    case 0:
-      return 2000;
-    case 1:
-      return 2000;
-    case 2:
-      return 1000;
-    case 4:
-      return 500;
-    case 8:
-      return 250;
-    default:
-      return 2000;
-  }
-}
-
 /**
  * Creates fresh initial game state.
  */
 export function createInitialGameState(selectedState: IndianStateCode = 'MH'): GameState {
+  const secondsPerYear1x = DEFAULT_GAME_TIME_CONFIG.secondsPerYear1x; // 2160s = 36 min/yr
   return {
     version: '0.2.0',
     phase: 'STATE_SELECT', // Start in state selection mode
@@ -51,9 +35,11 @@ export function createInitialGameState(selectedState: IndianStateCode = 'MH'): G
       currentTick: 1,
       currentYear: 2026,
       currentMonth: 1,
+      currentDay: 1,
       isPaused: false,
       speed: 1,
-      tickRateMs: 2000,
+      tickRateMs: Math.round((secondsPerYear1x * 1000) / 12), // 180,000 ms at 1x
+      secondsPerYear1x,
     },
     states: JSON.parse(JSON.stringify(ALL_TERRITORIES_DATA)),
     globalMarketPrices: {
@@ -79,6 +65,7 @@ export function stepSimulation(currentState: GameState, action?: PlayerAction): 
       action.type === 'SET_INSPECTED_STATE' ||
       action.type === 'SET_GAME_PHASE' ||
       action.type === 'SET_GAME_SPEED' ||
+      action.type === 'SET_PACING_CONFIG' ||
       action.type === 'TOGGLE_PAUSE'
     ) {
       return { nextState: state, electionResults: {} };
@@ -234,16 +221,34 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
         },
       };
 
-    case 'SET_GAME_SPEED':
+    case 'SET_GAME_SPEED': {
+      const spd = action.speed;
+      const seconds1x = state.clock.secondsPerYear1x || DEFAULT_GAME_TIME_CONFIG.secondsPerYear1x;
+      const tickRateMs = spd === 0 ? 0 : Math.round((seconds1x * 1000) / (12 * spd));
       return {
         ...state,
         clock: {
           ...state.clock,
-          speed: action.speed,
-          isPaused: action.speed === 0,
-          tickRateMs: getTickRateFromSpeed(action.speed),
+          speed: spd,
+          isPaused: spd === 0,
+          tickRateMs: tickRateMs > 0 ? tickRateMs : state.clock.tickRateMs,
         },
       };
+    }
+
+    case 'SET_PACING_CONFIG': {
+      const seconds1x = action.secondsPerYear1x;
+      const spd = state.clock.speed;
+      const tickRateMs = spd === 0 ? 0 : Math.round((seconds1x * 1000) / (12 * spd));
+      return {
+        ...state,
+        clock: {
+          ...state.clock,
+          secondsPerYear1x: seconds1x,
+          tickRateMs: tickRateMs > 0 ? tickRateMs : state.clock.tickRateMs,
+        },
+      };
+    }
 
     case 'UPDATE_TAX_POLICY': {
       const stateObj = state.states[action.stateCode];

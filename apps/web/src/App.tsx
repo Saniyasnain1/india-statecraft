@@ -22,7 +22,7 @@ import { IndustryPanel } from './components/panels/IndustryPanel';
 import { EconomyPanel } from './components/panels/EconomyPanel';
 import { ElectionsPanel } from './components/panels/ElectionsPanel';
 
-const LOCAL_STORAGE_SAVE_KEY = 'india_statecraft_save_v2';
+const LOCAL_STORAGE_SAVE_KEY = 'india_statecraft_save_v3';
 
 export const App: React.FC = () => {
   // 1. Initialize Game State (restore from local storage or create fresh)
@@ -38,7 +38,6 @@ export const App: React.FC = () => {
     } catch (e) {
       console.warn('Could not parse local save, creating fresh state:', e);
     }
-    // Start fresh in STATE_SELECT phase
     const fresh = createInitialGameState('MH');
     fresh.phase = 'STATE_SELECT';
     return fresh;
@@ -51,10 +50,15 @@ export const App: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isAutosaving, setIsAutosaving] = useState<boolean>(false);
   const [zoomTarget, setZoomTarget] = useState<'WORLD' | 'INDIA' | 'STATE' | null>(null);
+  const [cameraLevel, setCameraLevel] = useState<'WORLD' | 'INDIA' | 'STATE'>('INDIA');
+  const [monthProgress, setMonthProgress] = useState<number>(0);
 
-  // Keep a stable ref to current state for the tick interval
+  // Keep a stable ref to current state for the simulation loop
   const stateRef = useRef(gameState);
   stateRef.current = gameState;
+
+  const lastTickTimeRef = useRef<number>(Date.now());
+  const accumulatedMsRef = useRef<number>(0);
 
   // 2. Dispatch player action
   const dispatchAction = useCallback((action: PlayerAction) => {
@@ -64,23 +68,47 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // 3. Simulation Tick Loop
+  // 3. Fixed-Timestep Simulation Loop (Prevents tab acceleration & guarantees deterministic pacing)
   useEffect(() => {
-    if (gameState.clock.isPaused || gameState.phase === 'STATE_SELECT') return;
+    if (gameState.clock.isPaused || gameState.phase === 'STATE_SELECT' || gameState.clock.speed === 0) {
+      lastTickTimeRef.current = Date.now();
+      return;
+    }
 
-    const intervalId = setInterval(() => {
-      const { nextState, electionResults } = stepSimulation(stateRef.current);
-      setGameState(nextState);
+    lastTickTimeRef.current = Date.now();
+    const intervalMs = 250; // 4Hz sub-tick for smooth UI progress & deterministic accumulator
 
-      // Alert if election occurred in the player's controlled state
-      const playerElection = electionResults[nextState.selectedPlayerState];
-      if (playerElection && playerElection.occurred) {
-        alert(playerElection.message);
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const deltaMs = now - lastTickTimeRef.current;
+      lastTickTimeRef.current = now;
+
+      // Bound delta to max 5s to avoid runaway bursts from background tabs
+      const clampedDeltaMs = Math.min(5000, Math.max(0, deltaMs));
+      accumulatedMsRef.current += clampedDeltaMs;
+
+      const tickTargetMs = stateRef.current.clock.tickRateMs;
+      const progress = Math.min(1, accumulatedMsRef.current / Math.max(1, tickTargetMs));
+      setMonthProgress(progress);
+
+      // When accumulated real time completes the target tick interval, step the simulation!
+      if (accumulatedMsRef.current >= tickTargetMs) {
+        accumulatedMsRef.current -= tickTargetMs;
+        setMonthProgress(0);
+
+        setGameState((prev) => {
+          const { nextState, electionResults } = stepSimulation(prev);
+          const playerElection = electionResults[nextState.selectedPlayerState];
+          if (playerElection && playerElection.occurred) {
+            setTimeout(() => alert(playerElection.message), 50);
+          }
+          return nextState;
+        });
       }
-    }, gameState.clock.tickRateMs);
+    }, intervalMs);
 
-    return () => clearInterval(intervalId);
-  }, [gameState.clock.isPaused, gameState.clock.tickRateMs, gameState.phase]);
+    return () => clearInterval(timer);
+  }, [gameState.clock.isPaused, gameState.clock.tickRateMs, gameState.clock.speed, gameState.phase]);
 
   // 4. Local Guest Auto-Save Loop
   useEffect(() => {
@@ -94,7 +122,7 @@ export const App: React.FC = () => {
       } finally {
         setTimeout(() => setIsAutosaving(false), 300);
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearTimeout(saveTimer);
   }, [gameState]);
@@ -105,22 +133,35 @@ export const App: React.FC = () => {
   };
 
   const handleSetSpeed = (speed: GameSpeed) => {
+    accumulatedMsRef.current = 0;
+    setMonthProgress(0);
     dispatchAction({ type: 'SET_GAME_SPEED', speed });
+  };
+
+  const handleSetPacing = (secondsPerYear: number) => {
+    accumulatedMsRef.current = 0;
+    setMonthProgress(0);
+    dispatchAction({ type: 'SET_PACING_CONFIG', secondsPerYear1x: secondsPerYear });
   };
 
   const handleSelectStateOnMap = (code: TerritoryCode) => {
     setInspectedStateCode(code);
     setIsDrawerOpen(true);
+    setCameraLevel('STATE');
   };
 
   const handleSelectStateToPlay = (code: TerritoryCode) => {
     dispatchAction({ type: 'SELECT_STATE_TO_PLAY', stateCode: code });
     setInspectedStateCode(code);
     dispatchAction({ type: 'SET_GAME_PHASE', phase: 'PLAYING' });
+    setZoomTarget('STATE');
+    setCameraLevel('STATE');
   };
 
   const handleSpectate = () => {
     dispatchAction({ type: 'SET_GAME_PHASE', phase: 'PLAYING' });
+    setZoomTarget('INDIA');
+    setCameraLevel('INDIA');
   };
 
   const inspectedStateProfile = gameState.states[inspectedStateCode] || gameState.states['MH'];
@@ -137,26 +178,38 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 2. Top Header HUD */}
+      {/* 2. Top Header HUD with Progress & Speed Controls */}
       <HeaderHUD
         clock={gameState.clock}
         playerState={playerControlledStateProfile}
+        monthProgress={monthProgress}
         onTogglePause={handleTogglePause}
         onSetSpeed={handleSetSpeed}
+        onSetPacing={handleSetPacing}
         onOpenStateSelect={() => dispatchAction({ type: 'SET_GAME_PHASE', phase: 'STATE_SELECT' })}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         isAutosaving={isAutosaving}
       />
 
-      {/* 3. Camera / Zoom Switcher */}
+      {/* 3. Camera Breadcrumb Navigation (World > India > State) */}
       <WorldViewZoomControl
-        onZoomToWorld={() => setZoomTarget('WORLD')}
-        onZoomToIndia={() => setZoomTarget('INDIA')}
-        onZoomToState={() => setZoomTarget('STATE')}
+        onZoomToWorld={() => {
+          setZoomTarget('WORLD');
+          setCameraLevel('WORLD');
+        }}
+        onZoomToIndia={() => {
+          setZoomTarget('INDIA');
+          setCameraLevel('INDIA');
+        }}
+        onZoomToState={() => {
+          setZoomTarget('STATE');
+          setCameraLevel('STATE');
+        }}
         selectedStateName={inspectedStateProfile.name}
+        currentLevel={cameraLevel}
       />
 
-      {/* 4. Central Strategy Map (MapLibre GL) */}
+      {/* 4. MapLibre GL Strategic Map (Natural World Map & Dummynation Golden Glow Heatmap) */}
       <MapView
         states={gameState.states}
         activeMode={activeMode}
@@ -169,10 +222,10 @@ export const App: React.FC = () => {
       {/* 5. Thematic Map Modes Bar (12 Modes) */}
       <MapModeBar activeMode={activeMode} onSelectMode={setActiveMode} />
 
-      {/* 6. Thematic Map Legend */}
+      {/* 6. Thematic Map Legend (Golden Glow in Economy Mode) */}
       <MapLegend mode={activeMode} />
 
-      {/* 7. Strategy Dock (Bottom Bar) */}
+      {/* 7. Strategy Dock (Bottom Consoles) */}
       <StrategyDock
         activePanel={activePanel}
         onTogglePanel={(p) => setActivePanel(p)}

@@ -10,17 +10,19 @@ import {
 
 export * from './economicConfig.js';
 
-function createInitialBudget(gdpUSD: number) {
-  // Approximate monthly tax revenues based on state GDP in USD
+function createInitialBudget(gdpUSD: number, debtUSD: number = Math.round(gdpUSD * 0.18)) {
+  // Monthly State GDP
   const monthlyGdp = gdpUSD / 12;
-  const businessTaxRevenueUSD = Math.round(monthlyGdp * 0.035);
-  const consumptionTaxRevenueUSD = Math.round(monthlyGdp * 0.040);
-  const propertyTaxRevenueUSD = Math.round(monthlyGdp * 0.012);
-  const exciseTaxRevenueUSD = Math.round(monthlyGdp * 0.015);
-  const vehicleTaxRevenueUSD = Math.round(monthlyGdp * 0.008);
-  const electricityTaxRevenueUSD = Math.round(monthlyGdp * 0.007);
-  const centralTransfersUSD = Math.round(monthlyGdp * 0.025);
-  const transportProfitsUSD = Math.round(monthlyGdp * 0.004);
+
+  // Realized state tax yields based on statutory policy
+  const businessTaxRevenueUSD = Math.round(monthlyGdp * 0.22 * DEFAULT_TAX_POLICY.businessTaxRate);
+  const consumptionTaxRevenueUSD = Math.round(monthlyGdp * 0.38 * DEFAULT_TAX_POLICY.consumptionTaxRate);
+  const propertyTaxRevenueUSD = Math.round(monthlyGdp * 0.12 * DEFAULT_TAX_POLICY.propertyTaxRate);
+  const exciseTaxRevenueUSD = Math.round(monthlyGdp * 0.06 * DEFAULT_TAX_POLICY.stateExciseTaxRate);
+  const vehicleTaxRevenueUSD = Math.round(monthlyGdp * 0.05 * DEFAULT_TAX_POLICY.vehicleTaxRate);
+  const electricityTaxRevenueUSD = Math.round(monthlyGdp * 0.06 * DEFAULT_TAX_POLICY.electricityDutyRate);
+  const centralTransfersUSD = Math.round(monthlyGdp * 0.024);
+  const transportProfitsUSD = 0;
 
   const totalRev =
     businessTaxRevenueUSD +
@@ -32,11 +34,20 @@ function createInitialBudget(gdpUSD: number) {
     centralTransfersUSD +
     transportProfitsUSD;
 
-  const publicSalariesUSD = Math.round(totalRev * 0.38);
-  const infrastructureMaintenanceUSD = Math.round(totalRev * 0.16);
-  const welfareAndSubsidiesUSD = Math.round(totalRev * 0.22);
-  const debtServicingUSD = Math.round(totalRev * 0.12);
-  const publicInvestmentUSD = Math.round(totalRev * 0.08);
+  // Realistic expenditure allocations (balanced baseline)
+  const debtServicingUSD = Math.round(debtUSD * (0.07 / 12));
+  const nonDebtRev = Math.max(100_000, totalRev - debtServicingUSD);
+  const publicSalariesUSD = Math.round(nonDebtRev * 0.44);
+  const welfareAndSubsidiesUSD = Math.round(nonDebtRev * 0.28);
+  const infrastructureMaintenanceUSD = Math.round(nonDebtRev * 0.18);
+  const publicInvestmentUSD = Math.round(nonDebtRev * 0.10);
+
+  const totalExp =
+    publicSalariesUSD +
+    infrastructureMaintenanceUSD +
+    welfareAndSubsidiesUSD +
+    debtServicingUSD +
+    publicInvestmentUSD;
 
   return {
     budget: {
@@ -55,12 +66,7 @@ function createInitialBudget(gdpUSD: number) {
       publicInvestmentUSD,
     },
     totalRev,
-    totalExp:
-      publicSalariesUSD +
-      infrastructureMaintenanceUSD +
-      welfareAndSubsidiesUSD +
-      debtServicingUSD +
-      publicInvestmentUSD,
+    totalExp,
   };
 }
 
@@ -78,7 +84,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 450_000_000_000; // $450B
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 8_200_000_000, // $8.2B
+        treasuryUSD: 240_000_000, // $8.2B
         gdpUSD: gdp,
         gdpGrowthRate: 0.072,
         gdpPerCapitaUSD: 3_550,
@@ -188,7 +194,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 310_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 6_800_000_000,
+        treasuryUSD: 190_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.082,
         gdpPerCapitaUSD: 4_350,
@@ -279,7 +285,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 295_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 6_400_000_000,
+        treasuryUSD: 180_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.078,
         gdpPerCapitaUSD: 4_300,
@@ -370,7 +376,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 330_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 5_900_000_000,
+        treasuryUSD: 175_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.076,
         gdpPerCapitaUSD: 4_300,
@@ -442,7 +448,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 290_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 7_100_000_000,
+        treasuryUSD: 160_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.084,
         gdpPerCapitaUSD: 1_200,
@@ -533,7 +539,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 165_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 4_200_000_000,
+        treasuryUSD: 130_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.081,
         gdpPerCapitaUSD: 4_320,
@@ -604,7 +610,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 210_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_800_000_000,
+        treasuryUSD: 110_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.068,
         gdpPerCapitaUSD: 2_100,
@@ -675,7 +681,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 175_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_500_000_000,
+        treasuryUSD: 95_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.075,
         gdpPerCapitaUSD: 3_300,
@@ -746,7 +752,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 185_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_600_000_000,
+        treasuryUSD: 100_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.071,
         gdpPerCapitaUSD: 2_280,
@@ -817,7 +823,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 160_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_400_000_000,
+        treasuryUSD: 90_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.077,
         gdpPerCapitaUSD: 1_850,
@@ -888,7 +894,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 135_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 2_500_000_000,
+        treasuryUSD: 85_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.065,
         gdpPerCapitaUSD: 3_770,
@@ -959,7 +965,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 105_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 2_200_000_000,
+        treasuryUSD: 70_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.088,
         gdpPerCapitaUSD: 825,
@@ -1030,7 +1036,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 90_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_800_000_000,
+        treasuryUSD: 80_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.058,
         gdpPerCapitaUSD: 2_920,
@@ -1101,7 +1107,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 135_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_100_000_000,
+        treasuryUSD: 95_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.079,
         gdpPerCapitaUSD: 4_530,
@@ -1172,7 +1178,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 105_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 3_200_000_000,
+        treasuryUSD: 75_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.078,
         gdpPerCapitaUSD: 2_270,
@@ -1243,7 +1249,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 55_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_900_000_000,
+        treasuryUSD: 60_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.070,
         gdpPerCapitaUSD: 1_390,
@@ -1314,7 +1320,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 60_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_700_000_000,
+        treasuryUSD: 50_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.073,
         gdpPerCapitaUSD: 1_990,
@@ -1385,7 +1391,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 70_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_600_000_000,
+        treasuryUSD: 55_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.071,
         gdpPerCapitaUSD: 1_960,
@@ -1456,7 +1462,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 42_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_200_000_000,
+        treasuryUSD: 45_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.076,
         gdpPerCapitaUSD: 3_590,
@@ -1527,7 +1533,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 26_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 900_000_000,
+        treasuryUSD: 40_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.069,
         gdpPerCapitaUSD: 3_450,
@@ -1598,7 +1604,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 12_500_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 650_000_000,
+        treasuryUSD: 35_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.075,
         gdpPerCapitaUSD: 7_900,
@@ -1669,7 +1675,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 9_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 400_000_000,
+        treasuryUSD: 25_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.072,
         gdpPerCapitaUSD: 2_170,
@@ -1739,7 +1745,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 5_200_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 350_000_000,
+        treasuryUSD: 20_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.064,
         gdpPerCapitaUSD: 1_625,
@@ -1807,7 +1813,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 5_600_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 340_000_000,
+        treasuryUSD: 22_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.068,
         gdpPerCapitaUSD: 1_670,
@@ -1875,7 +1881,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 4_600_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 310_000_000,
+        treasuryUSD: 18_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.062,
         gdpPerCapitaUSD: 2_050,
@@ -1943,7 +1949,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 4_800_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 380_000_000,
+        treasuryUSD: 20_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.078,
         gdpPerCapitaUSD: 3_050,
@@ -2011,7 +2017,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 4_200_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 290_000_000,
+        treasuryUSD: 18_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.074,
         gdpPerCapitaUSD: 3_360,
@@ -2079,7 +2085,7 @@ export const INITIAL_STATES_DATA: Record<IndianStateCode, StateProfile> = {
       const gdp = 5_800_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 320_000_000,
+        treasuryUSD: 22_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.082,
         gdpPerCapitaUSD: 8_400,
@@ -2152,7 +2158,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 130_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 5_400_000_000,
+        treasuryUSD: 140_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.076,
         gdpPerCapitaUSD: 6_050,
@@ -2223,7 +2229,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 28_000_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 1_100_000_000,
+        treasuryUSD: 45_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.071,
         gdpPerCapitaUSD: 2_050,
@@ -2291,7 +2297,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 1_100_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 200_000_000,
+        treasuryUSD: 15_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.065,
         gdpPerCapitaUSD: 3_660,
@@ -2359,7 +2365,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 6_500_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 600_000_000,
+        treasuryUSD: 25_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.075,
         gdpPerCapitaUSD: 5_300,
@@ -2427,7 +2433,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 5_500_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 450_000_000,
+        treasuryUSD: 20_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.072,
         gdpPerCapitaUSD: 3_870,
@@ -2495,7 +2501,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 1_500_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 280_000_000,
+        treasuryUSD: 18_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.068,
         gdpPerCapitaUSD: 3_480,
@@ -2563,7 +2569,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 5_800_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 380_000_000,
+        treasuryUSD: 16_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.076,
         gdpPerCapitaUSD: 9_350,
@@ -2631,7 +2637,7 @@ export const INITIAL_UNION_TERRITORIES_DATA: Record<UnionTerritoryCode, StatePro
       const gdp = 220_000_000;
       const { budget, totalRev, totalExp } = createInitialBudget(gdp);
       return {
-        treasuryUSD: 80_000_000,
+        treasuryUSD: 12_000_000,
         gdpUSD: gdp,
         gdpGrowthRate: 0.062,
         gdpPerCapitaUSD: 3_230,

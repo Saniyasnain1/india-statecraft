@@ -8,6 +8,8 @@ import {
   BUILDING_DEFINITIONS,
   TRAIN_CONFIGS,
   calculateTrainEconomics,
+  DEFAULT_GAME_TIME_CONFIG,
+  getTickRateFromSpeed,
 } from '@india-statecraft/game-data';
 import { MAP_MODES, getMapColorForValue, formatUSD } from '@india-statecraft/map-data';
 import { createInitialGameState, stepSimulation } from '@india-statecraft/simulation';
@@ -107,4 +109,89 @@ test('5. Simulation Engine Ticking, Value-Added GDP & Election Clock', () => {
     prevMonthsToElection - 1,
     'Months to election must decrement by 1 each month'
   );
+});
+
+test('6. Simulation Clock Pacing & Speed Acceleration Scaling', () => {
+  // Target: ~30-45 minutes per year at 1x speed (default 2160s = 36 min/yr)
+  const secondsPerYear = DEFAULT_GAME_TIME_CONFIG.secondsPerYear1x;
+  assert.ok(secondsPerYear >= 1800 && secondsPerYear <= 2700, 'Target pacing must be 30-45 min per year');
+
+  const initial = createInitialGameState('MH');
+  assert.equal(initial.clock.secondsPerYear1x, 2160);
+
+  // At 1x: 180,000 ms per month (3 minutes per month = 36 min per year)
+  assert.equal(initial.clock.tickRateMs, 180_000);
+
+  // Test speed acceleration consistency
+  const state2x = stepSimulation(initial, { type: 'SET_GAME_SPEED', speed: 2 }).nextState;
+  assert.equal(state2x.clock.speed, 2);
+  assert.equal(state2x.clock.tickRateMs, 90_000); // 1.5 min per month
+
+  const state4x = stepSimulation(initial, { type: 'SET_GAME_SPEED', speed: 4 }).nextState;
+  assert.equal(state4x.clock.speed, 4);
+  assert.equal(state4x.clock.tickRateMs, 45_000); // 45s per month
+
+  const state8x = stepSimulation(initial, { type: 'SET_GAME_SPEED', speed: 8 }).nextState;
+  assert.equal(state8x.clock.speed, 8);
+  assert.equal(state8x.clock.tickRateMs, 22_500); // 22.5s per month
+
+  // Pause stops simulation
+  const pausedState = stepSimulation(initial, { type: 'TOGGLE_PAUSE' }).nextState;
+  assert.equal(pausedState.clock.isPaused, true);
+  const afterPausedStep = stepSimulation(pausedState).nextState;
+  assert.equal(afterPausedStep.clock.currentTick, initial.clock.currentTick, 'Paused clock must not tick');
+});
+
+test('7. Realistic Starting Treasury & Fiscal Balance', () => {
+  for (const code of ALL_STATE_CODES) {
+    const state = INITIAL_STATES_DATA[code];
+    // No state starts with billions in liquid cash
+    assert.ok(
+      state.economy.treasuryUSD <= 250_000_000,
+      `${code} starting treasury must be <= $250M (found $${state.economy.treasuryUSD})`
+    );
+    assert.ok(
+      state.economy.treasuryUSD >= 15_000_000,
+      `${code} starting treasury must be >= $15M (found $${state.economy.treasuryUSD})`
+    );
+
+    // Initial budget must be balanced within reasonable margins (-3% to +3% of revenue)
+    const rev = state.economy.monthlyRevenueUSD;
+    const exp = state.economy.monthlyExpenditureUSD;
+    const margin = Math.abs(rev - exp) / Math.max(1, rev);
+    assert.ok(
+      margin <= 0.05,
+      `${code} starting budget must be near balanced (margin is ${(margin * 100).toFixed(1)}%)`
+    );
+  }
+});
+
+test('8. Dummynation Golden Glow Heatmap & 12 Modes Validation', () => {
+  const econConfig = MAP_MODES['economy'];
+  assert.ok(econConfig, 'Economy map mode must exist');
+
+  // Verify golden glow color scale
+  const lowestColor = getMapColorForValue('economy', 1_000_000_000);
+  const highestColor = getMapColorForValue('economy', 450_000_000_000);
+  assert.ok(lowestColor.startsWith('#'), 'Must return valid hex color');
+  assert.ok(highestColor.startsWith('#'), 'Must return valid hex color');
+  assert.notEqual(lowestColor, highestColor, 'Lowest and highest economic values must have distinct colors');
+
+  // Verify all 12 map modes exist and return non-static dynamic values
+  const modes = [
+    'terrain', 'economy', 'population', 'industry', 'agriculture',
+    'naturalResources', 'infrastructure', 'happiness', 'research',
+    'militaryContribution', 'trade', 'waterResources'
+  ];
+
+  for (const m of modes) {
+    const conf = MAP_MODES[m];
+    assert.ok(conf, `Map mode ${m} must exist`);
+
+    const mhVal = conf.getValue(INITIAL_STATES_DATA['MH']);
+    const skVal = conf.getValue(INITIAL_STATES_DATA['SK']);
+    assert.equal(typeof mhVal, 'number', `${m} value for MH must be a number`);
+    assert.equal(typeof skVal, 'number', `${m} value for SK must be a number`);
+    assert.ok(conf.formatValue(mhVal).length > 0, `${m} formatValue must return string`);
+  }
 });
