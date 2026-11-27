@@ -186,6 +186,7 @@ export interface BuildingDefinition {
 export interface StateBuildingInstance {
   id: string;
   type: BuildingCategory;
+  level?: number;
   isUnderConstruction: boolean;
   ticksRemaining: number;
   totalTicks: number;
@@ -261,4 +262,5 @@ export type PlayerAction =
   | { type: 'UPDATE_TAX_POLICY'; stateCode: TerritoryCode; taxPolicy: TaxPolicySettings }
   | { type: 'PURCHASE_TRAIN_ROUTE'; stateCode: TerritoryCode; fromCity: string; toCity: string; trainType: TrainType; activeTrainsCount: number; distanceKm: number }
   | { type: 'COMMENCE_BUILDING_CONSTRUCTION'; stateCode: TerritoryCode; buildingType: BuildingCategory; coords?: [number, number]; locationName?: string }
+  | { type: 'UPGRADE_BUILDING'; stateCode: TerritoryCode; buildingId: string }
   | { type: 'REBALANCE_PUBLIC_BUDGET'; stateCode: TerritoryCode; publicInvestmentShare: number; welfareShare: number };

@@ -32,7 +32,8 @@ export function stepEconomy(
     if (!b.isUnderConstruction) {
       const def = BUILDING_DEFINITIONS[b.type];
       if (def) {
-        monthlyBuildingGdpValueAddedUSD += def.monthlyGdpValueAddedUSD;
+        const levelMult = 1 + ((b.level || 1) - 1) * 0.25;
+        monthlyBuildingGdpValueAddedUSD += Math.round(def.monthlyGdpValueAddedUSD * levelMult);
         // Public maintenance of state-supported assets
         monthlyBuildingPublicExpenseUSD += def.monthlyOperatingExpenseUSD;
       }

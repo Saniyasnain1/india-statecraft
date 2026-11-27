@@ -7,7 +7,7 @@ import {
   GameSpeed,
   BuildingCategory,
 } from '@india-statecraft/shared-types';
-import { getProgressiveBuildingCostUSD } from '@india-statecraft/game-data';
+import { getProgressiveBuildingCostUSD, getBuildingUpgradeCostUSD, MAX_BUILDING_LEVEL } from '@india-statecraft/game-data';
 import { formatUSD } from '@india-statecraft/map-data';
 import { createInitialGameState, stepSimulation } from '@india-statecraft/simulation';
 import { MapView } from './map/MapView';
@@ -57,6 +57,7 @@ export const App: React.FC = () => {
   const [monthProgress, setMonthProgress] = useState<number>(0);
   const [activeBuildTool, setActiveBuildTool] = useState<BuildingCategory | null>(null);
   const [buildNotice, setBuildNotice] = useState<string | null>(null);
+  const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{ id: string; stateCode: TerritoryCode } | null>(null);
 
   // Keep a stable ref to current state for the simulation loop
   const stateRef = useRef(gameState);
@@ -287,6 +288,7 @@ export const App: React.FC = () => {
         playerStateCode={gameState.selectedPlayerState}
         activeBuildTool={activeBuildTool}
         onPlaceBuilding={handlePlaceBuilding}
+        onClickBuilding={(id, code) => setSelectedBuildingInfo({ id, stateCode: code })}
         onSelectState={handleSelectStateOnMap}
         zoomTarget={zoomTarget}
         onZoomComplete={() => setZoomTarget(null)}
@@ -440,6 +442,68 @@ export const App: React.FC = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {/* 11. Building Upgrade Inspector Panel */}
+      {selectedBuildingInfo && (() => {
+        const pCode = gameState.selectedPlayerState;
+        const pState = gameState.states[pCode];
+        const building = pState?.buildings.find((b) => b.id === selectedBuildingInfo.id);
+        if (!building || selectedBuildingInfo.stateCode !== pCode) {
+          // Not the player's building — just dismiss
+          return (
+            <div
+              className="absolute inset-0 z-50"
+              onClick={() => setSelectedBuildingInfo(null)}
+            />
+          );
+        }
+        const level = building.level ?? 1;
+        const canUpgrade = level < MAX_BUILDING_LEVEL;
+        const upgradeCost = getBuildingUpgradeCostUSD(building.type, level);
+        const canAfford = pState.economy.treasuryUSD >= upgradeCost;
+        const typeLabel =
+          building.type === 'RESIDENTIAL' ? 'City' :
+          building.type === 'FACTORY' ? 'Factory' :
+          building.type === 'RAILWAY_DEPOT' ? 'Railway Station' : 'Sea Port';
+        return (
+          <>
+            <div
+              className="absolute inset-0 z-40"
+              onClick={() => setSelectedBuildingInfo(null)}
+            />
+            <div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-slate-950/98 border border-amber-500/60 rounded-2xl p-5 shadow-2xl min-w-[220px] pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-3">
+                <span className="font-bold text-amber-400 text-sm">{building.locationName || typeLabel}</span>
+                <button onClick={() => setSelectedBuildingInfo(null)} className="text-slate-400 hover:text-white text-lg leading-none">×</button>
+              </div>
+              <div className="text-xs text-slate-300 mb-1">Type: <strong className="text-white">{typeLabel}</strong></div>
+              <div className="text-xs text-slate-300 mb-3">Level: <strong className="text-amber-300 font-mono">{level} / {MAX_BUILDING_LEVEL}</strong></div>
+              {canUpgrade ? (
+                <button
+                  disabled={!canAfford}
+                  onClick={() => {
+                    dispatchAction({ type: 'UPGRADE_BUILDING', stateCode: pCode, buildingId: building.id });
+                    setSelectedBuildingInfo(null);
+                    showBuildNotice(`Upgraded ${typeLabel} to Level ${level + 1} for ${formatUSD(upgradeCost)}.`);
+                  }}
+                  className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
+                    canAfford
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                      : 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  Upgrade → Lv {level + 1} ({formatUSD(upgradeCost)})
+                </button>
+              ) : (
+                <div className="text-center text-xs text-green-400 font-bold py-2">MAX LEVEL REACHED</div>
+              )}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 };

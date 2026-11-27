@@ -164,8 +164,8 @@ export const BUILDING_DEFINITIONS: Record<BuildingCategory, BuildingDefinition> 
   },
   RAILWAY_DEPOT: {
     type: 'RAILWAY_DEPOT',
-    name: 'Multi-Modal Logistics Freight Terminal',
-    description: 'Marshalling yard and container freight transfer hub connecting factories with rail corridors.',
+    name: 'Railway Station',
+    description: 'Railway station generating train tracks that automatically connect to factories, cities, and neighboring stations.',
     constructionCostUSD: 50_000_000,
     constructionTimeTicks: 8,
     monthlyOperatingExpenseUSD: 260_000,
@@ -236,6 +236,23 @@ export function getProgressiveBuildingCostUSD(
   if (!def) return 0;
   const multiplier = Math.min(10, Math.pow(1.35, Math.max(0, ownedCountOfType)));
   return Math.round(def.constructionCostUSD * multiplier);
+}
+
+/**
+ * Building Level-Up Cost (Levels 1 -> 10):
+ * Each upgrade boosts building output by +25% and costs baseCost * 0.75 * 1.35^level.
+ */
+export const MAX_BUILDING_LEVEL = 10;
+
+export function getBuildingUpgradeCostUSD(
+  buildingType: BuildingCategory,
+  currentLevel: number
+): number {
+  if (currentLevel >= MAX_BUILDING_LEVEL) return Infinity;
+  const def = BUILDING_DEFINITIONS[buildingType];
+  if (!def) return 0;
+  const raw = def.constructionCostUSD * 0.75 * Math.pow(1.35, Math.max(1, currentLevel));
+  return Math.min(Math.round(raw), def.constructionCostUSD * 10);
 }
 
 // ----------------- TRAIN CONFIGURATIONS & PRICING -----------------

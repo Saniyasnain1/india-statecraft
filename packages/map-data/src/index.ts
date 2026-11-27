@@ -519,3 +519,129 @@ export const RAILWAY_CORRIDORS: { fromCity: string; toCity: string; fromCoords: 
   { fromCity: 'Bhopal', toCity: 'New Delhi', fromCoords: [77.4126, 23.2599], toCoords: [77.2090, 28.6139] },
   { fromCity: 'Chennai', toCity: 'Thiruvananthapuram', fromCoords: [80.2707, 13.0827], toCoords: [76.9366, 8.5241] },
 ];
+
+// Major Indian Rivers for map rendering & riverfront validation (Dam / River Port)
+export interface RiverPolyline {
+  id: string;
+  name: string;
+  coordinates: [number, number][];
+}
+
+export const INDIAN_RIVERS: RiverPolyline[] = [
+  {
+    id: 'ganga',
+    name: 'Ganga',
+    coordinates: [
+      [78.60, 30.15], [78.16, 29.94], [78.85, 28.90], [80.33, 26.45],
+      [81.84, 25.43], [82.97, 25.31], [83.98, 25.68], [85.14, 25.61],
+      [86.97, 25.25], [87.92, 24.80], [88.10, 22.50], [88.15, 22.02], [88.25, 21.65],
+    ],
+  },
+  {
+    id: 'yamuna',
+    name: 'Yamuna',
+    coordinates: [
+      [78.46, 31.01], [77.50, 30.20], [77.22, 28.61], [77.67, 27.49],
+      [78.01, 27.18], [79.02, 26.75], [80.35, 25.90], [81.84, 25.43],
+    ],
+  },
+  {
+    id: 'brahmaputra',
+    name: 'Brahmaputra',
+    coordinates: [
+      [95.30, 28.10], [94.91, 27.47], [93.75, 26.85], [92.80, 26.65],
+      [91.73, 26.14], [90.65, 26.18], [89.97, 26.02], [89.70, 25.15], [90.45, 23.50],
+    ],
+  },
+  {
+    id: 'godavari',
+    name: 'Godavari',
+    coordinates: [
+      [73.79, 19.99], [74.75, 19.80], [76.05, 19.35], [77.31, 19.15],
+      [78.09, 18.67], [79.80, 18.75], [80.85, 17.65], [81.78, 17.00], [82.20, 16.50],
+    ],
+  },
+  {
+    id: 'krishna',
+    name: 'Krishna',
+    coordinates: [
+      [73.66, 17.92], [74.57, 16.85], [75.90, 16.20], [77.35, 16.25],
+      [78.55, 16.10], [80.05, 16.60], [80.64, 16.50], [80.90, 15.80],
+    ],
+  },
+  {
+    id: 'narmada',
+    name: 'Narmada',
+    coordinates: [
+      [81.75, 22.67], [80.50, 22.85], [79.93, 23.18], [78.20, 22.80],
+      [76.50, 22.25], [74.50, 21.95], [72.98, 21.70], [72.60, 21.60],
+    ],
+  },
+  {
+    id: 'tapi',
+    name: 'Tapi',
+    coordinates: [
+      [78.25, 21.77], [76.50, 21.35], [75.30, 21.20], [73.80, 21.30],
+      [72.83, 21.17], [72.70, 21.10],
+    ],
+  },
+  {
+    id: 'mahanadi',
+    name: 'Mahanadi',
+    coordinates: [
+      [81.90, 20.30], [81.80, 21.15], [82.80, 21.40], [83.97, 21.46],
+      [84.85, 20.80], [85.88, 20.46], [86.60, 20.30],
+    ],
+  },
+  {
+    id: 'kaveri',
+    name: 'Kaveri',
+    coordinates: [
+      [75.49, 12.38], [76.69, 12.42], [77.70, 12.05], [78.15, 11.45],
+      [78.69, 10.79], [79.50, 10.95], [79.85, 11.14],
+    ],
+  },
+  {
+    id: 'sutlej',
+    name: 'Sutlej',
+    coordinates: [
+      [78.60, 31.50], [77.50, 31.30], [76.43, 31.41], [75.80, 30.90],
+      [74.90, 31.10], [74.30, 31.10],
+    ],
+  },
+];
+
+function haversineKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[1] - a[1]) * Math.PI) / 180;
+  const dLon = ((b[0] - a[0]) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((a[1] * Math.PI) / 180) *
+      Math.cos((b[1] * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/**
+ * Returns true if [lon, lat] is within maxKm of any navigable river segment.
+ */
+export function isPointNearRiver(coords: [number, number], maxKm = 65): boolean {
+  for (const river of INDIAN_RIVERS) {
+    for (let i = 0; i < river.coordinates.length - 1; i++) {
+      const p1 = river.coordinates[i];
+      const p2 = river.coordinates[i + 1];
+      // Check endpoints and midpoint
+      const mid: [number, number] = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+      if (
+        haversineKm(coords, p1) <= maxKm ||
+        haversineKm(coords, p2) <= maxKm ||
+        haversineKm(coords, mid) <= maxKm
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

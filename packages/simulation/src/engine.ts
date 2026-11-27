@@ -9,6 +9,8 @@ import {
   ALL_TERRITORIES_DATA,
   BUILDING_DEFINITIONS,
   getProgressiveBuildingCostUSD,
+  getBuildingUpgradeCostUSD,
+  MAX_BUILDING_LEVEL,
   calculateTrainEconomics,
   DEFAULT_GAME_TIME_CONFIG,
 } from '@india-statecraft/game-data';
@@ -154,7 +156,7 @@ export function stepSimulation(currentState: GameState, action?: PlayerAction): 
       electionResults[code] = electionResult;
     }
 
-    nextStates[code] = {
+    const steppedProfile: StateProfile = {
       ...prevState,
       buildings: updatedBuildings,
       routes: updatedRoutes,
@@ -175,6 +177,12 @@ export function stepSimulation(currentState: GameState, action?: PlayerAction): 
         Math.round(prevState.tradeVolumeIndex * (1 + monthlyGrowth * 0.4))
       ),
     };
+
+    // Computer-driven AI states build Cities, Factories, Railway Stations, Ports & Dams
+    nextStates[code] =
+      code !== state.selectedPlayerState
+        ? runAIStateDecision(steppedProfile, nextTick)
+        : steppedProfile;
   }
 
   const nextGameState: GameState = {
@@ -293,13 +301,18 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
       if (buildingDef.requiresRiver && stateObj.majorRivers.length === 0) {
         return state; // Dam requires a river
       }
-      if (buildingDef.requiresCoastal && stateObj.infrastructure.portType !== 'COASTAL_PORT') {
-        return state; // Seaport requires coastal geography
+      if (
+        buildingDef.requiresCoastal &&
+        stateObj.infrastructure.portType !== 'COASTAL_PORT' &&
+        stateObj.majorRivers.length === 0
+      ) {
+        return state; // Seaport requires coastal geography or a navigable river
       }
 
       const newBuildingInstance = {
-        id: `b_${action.stateCode.toLowerCase()}_${Date.now()}`,
+        id: `b_${action.stateCode.toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: action.buildingType,
+        level: 1,
         isUnderConstruction: true,
         ticksRemaining: buildingDef.constructionTimeTicks,
         totalTicks: buildingDef.constructionTimeTicks,
@@ -321,6 +334,42 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
               treasuryUSD: nextTreasury,
             },
             buildings: [...stateObj.buildings, newBuildingInstance],
+          },
+        },
+      };
+    }
+
+    case 'UPGRADE_BUILDING': {
+      const stateObj = state.states[action.stateCode];
+      if (!stateObj) return state;
+
+      const idx = stateObj.buildings.findIndex((b) => b.id === action.buildingId);
+      if (idx === -1) return state;
+
+      const target = stateObj.buildings[idx];
+      const currentLevel = target.level || 1;
+      if (currentLevel >= MAX_BUILDING_LEVEL) return state;
+
+      const upgradeCost = getBuildingUpgradeCostUSD(target.type, currentLevel);
+      if (stateObj.economy.treasuryUSD < upgradeCost) {
+        return state;
+      }
+
+      const updatedBuildings = stateObj.buildings.map((b, i) =>
+        i === idx ? { ...b, level: currentLevel + 1 } : b
+      );
+
+      return {
+        ...state,
+        states: {
+          ...state.states,
+          [action.stateCode]: {
+            ...stateObj,
+            economy: {
+              ...stateObj.economy,
+              treasuryUSD: stateObj.economy.treasuryUSD - upgradeCost,
+            },
+            buildings: updatedBuildings,
           },
         },
       };
@@ -398,4 +447,113 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
     default:
       return state;
   }
+}
+
+const AI_STATE_CENTERS: Partial<Record<TerritoryCode, [number, number]>> = {
+  MH: [75.7, 19.7], GJ: [71.2, 22.2], KA: [75.7, 15.3], TN: [78.6, 11.1],
+  UP: [80.9, 26.8], WB: [87.8, 22.9], AP: [79.7, 15.9], TS: [79.0, 17.8],
+  KL: [76.2, 10.8], RJ: [74.2, 27.0], MP: [77.4, 23.2], BR: [85.3, 25.6],
+  PB: [75.3, 31.1], HR: [76.3, 29.0], OD: [85.0, 20.9], JH: [85.3, 23.6],
+  AS: [92.9, 26.2], CG: [81.8, 21.2], UK: [79.0, 30.0], HP: [77.1, 31.1],
+  GA: [74.0, 15.3], TR: [91.7, 23.8], ML: [91.3, 25.5], MN: [93.9, 24.8],
+  NL: [94.5, 26.1], MZ: [92.9, 23.1], SK: [88.5, 27.5], AR: [94.7, 28.2],
+  DL: [77.2, 28.6], JK: [74.8, 33.7], LA: [77.5, 34.2], CH: [76.77, 30.73],
+  PY: [79.8, 11.9], AN: [92.7, 11.6], LD: [72.6, 10.5], DNHDD: [72.9, 20.4],
+};
+
+/**
+ * Computer-driven AI state economic decisions:
+ * AI states respect the exact same treasury, geographic, and progressive cost rules
+ * to build Cities, Factories, Railway Stations, Sea Ports, Dams, and upgrade them.
+ */
+function runAIStateDecision(stateObj: StateProfile, tick: number): StateProfile {
+  // Stagger AI decisions across ticks so all 35 AI states don't build on the exact same frame
+  const codeHash = stateObj.code.charCodeAt(0) + (stateObj.code.charCodeAt(1) || 0);
+  if ((tick + codeHash) % 3 !== 0) return stateObj;
+
+  const treasury = stateObj.economy.treasuryUSD;
+  const center = AI_STATE_CENTERS[stateObj.code] || [78.9, 22.5];
+
+  // Prioritize upgrading an existing completed building when affordable
+  const upgradable = stateObj.buildings.find(
+    (b) => !b.isUnderConstruction && (b.level || 1) < 4
+  );
+  if (upgradable && (tick + codeHash) % 6 === 0) {
+    const upgCost = getBuildingUpgradeCostUSD(upgradable.type, upgradable.level || 1);
+    if (treasury >= upgCost * 1.25) {
+      return {
+        ...stateObj,
+        economy: { ...stateObj.economy, treasuryUSD: treasury - upgCost },
+        buildings: stateObj.buildings.map((b) =>
+          b.id === upgradable.id ? { ...b, level: (b.level || 1) + 1 } : b
+        ),
+      };
+    }
+  }
+
+  // Otherwise construct new infrastructure based on state needs
+  const counts = {
+    RESIDENTIAL: stateObj.buildings.filter((b) => b.type === 'RESIDENTIAL').length,
+    FACTORY: stateObj.buildings.filter((b) => b.type === 'FACTORY').length,
+    RAILWAY_DEPOT: stateObj.buildings.filter((b) => b.type === 'RAILWAY_DEPOT').length,
+    SEAPORT: stateObj.buildings.filter((b) => b.type === 'SEAPORT').length,
+    DAM: stateObj.buildings.filter((b) => b.type === 'DAM').length,
+  };
+
+  let targetType: 'RESIDENTIAL' | 'FACTORY' | 'RAILWAY_DEPOT' | 'SEAPORT' | 'DAM' | null = null;
+  if (counts.FACTORY < 4 && counts.FACTORY <= counts.RESIDENTIAL) {
+    targetType = 'FACTORY';
+  } else if (counts.RESIDENTIAL < 4) {
+    targetType = 'RESIDENTIAL';
+  } else if (counts.RAILWAY_DEPOT < 3) {
+    targetType = 'RAILWAY_DEPOT';
+  } else if (
+    counts.SEAPORT < 2 &&
+    (stateObj.infrastructure.portType === 'COASTAL_PORT' || stateObj.majorRivers.length > 0)
+  ) {
+    targetType = 'SEAPORT';
+  } else if (counts.DAM < 2 && stateObj.majorRivers.length > 0) {
+    targetType = 'DAM';
+  }
+
+  if (!targetType) return stateObj;
+
+  const cost = getProgressiveBuildingCostUSD(targetType, counts[targetType]);
+  if (treasury < cost * 1.2) return stateObj; // Keep 20% fiscal reserve
+
+  const def = BUILDING_DEFINITIONS[targetType];
+  // Deterministic geographic offset within state radius
+  const angle = ((tick * 137.5 + codeHash * 41) % 360) * (Math.PI / 180);
+  const radius = 0.35 + ((tick + codeHash) % 5) * 0.12;
+  const coords: [number, number] = [
+    Number((center[0] + Math.cos(angle) * radius).toFixed(4)),
+    Number((center[1] + Math.sin(angle) * radius).toFixed(4)),
+  ];
+
+  const cityNamePool = stateObj.majorCities.filter(
+    (c) => !stateObj.buildings.some((b) => b.locationName === c)
+  );
+  const locationName =
+    targetType === 'RESIDENTIAL'
+      ? cityNamePool[0] || `${stateObj.name} City ${counts.RESIDENTIAL + 1}`
+      : undefined;
+
+  return {
+    ...stateObj,
+    economy: { ...stateObj.economy, treasuryUSD: treasury - cost },
+    buildings: [
+      ...stateObj.buildings,
+      {
+        id: `ai_${stateObj.code.toLowerCase()}_${tick}_${counts[targetType]}`,
+        type: targetType,
+        level: 1,
+        isUnderConstruction: true,
+        ticksRemaining: def.constructionTimeTicks,
+        totalTicks: def.constructionTimeTicks,
+        healthPercent: 100,
+        coords,
+        locationName,
+      },
+    ],
+  };
 }
