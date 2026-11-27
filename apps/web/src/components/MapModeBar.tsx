@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Map,
   Globe,
@@ -13,6 +13,7 @@ import {
   Shield,
   Truck,
   Droplets,
+  ChevronUp,
 } from 'lucide-react';
 import { MapMode } from '@india-statecraft/shared-types';
 import { MAP_MODES } from '@india-statecraft/map-data';
@@ -39,34 +40,68 @@ const MODE_ICONS: Record<MapMode, React.ReactNode> = {
 };
 
 export const MapModeBar: React.FC<MapModeBarProps> = ({ activeMode, onSelectMode }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const modesList = Object.keys(MAP_MODES) as MapMode[];
+  const activeConfig = MAP_MODES[activeMode];
 
   return (
-    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-      <div className="glass-panel rounded-2xl p-1 flex items-center gap-1 shadow-2xl max-w-[95vw] overflow-x-auto bg-slate-950/80">
-        {modesList.map((modeKey) => {
-          const config = MAP_MODES[modeKey];
-          const isActive = activeMode === modeKey;
+    <div
+      ref={ref}
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
+    >
+      {/* Dropdown panel — opens upward */}
+      {open && (
+        <div className="mb-2 bg-slate-950/95 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md w-56">
+          {modesList.map((modeKey) => {
+            const config = MAP_MODES[modeKey];
+            const isActive = activeMode === modeKey;
+            return (
+              <button
+                key={modeKey}
+                onClick={() => { onSelectMode(modeKey); setOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-medium transition-colors text-left ${
+                  isActive
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                }`}
+              >
+                <span className={isActive ? 'text-amber-400' : 'text-slate-500'}>
+                  {MODE_ICONS[modeKey]}
+                </span>
+                <span>{config.label}</span>
+                {isActive && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-          return (
-            <button
-              key={modeKey}
-              onClick={() => onSelectMode(modeKey)}
-              title={config.description}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap ${
-                isActive
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <span className={isActive ? 'text-slate-950' : 'text-slate-400'}>
-                {MODE_ICONS[modeKey]}
-              </span>
-              <span>{config.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Trigger button — shows current mode */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-950/90 border border-slate-700/60 shadow-xl backdrop-blur-md text-xs font-semibold text-white hover:border-amber-500/50 transition-all"
+      >
+        <span className="text-amber-400">{MODE_ICONS[activeMode]}</span>
+        <span>{activeConfig?.label ?? 'Map View'}</span>
+        <ChevronUp
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
     </div>
   );
 };
