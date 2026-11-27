@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
-    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/game-data && npm run build --workspace=packages/map-data && npm run build --workspace=packages/simulation && npm run build --workspace=apps/web && node -e \"import('node:fs').then(fs => fs.copyFileSync('index.html', 'apps/web/dist/index.html'))\"",
+    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/game-data && npm run build --workspace=packages/map-data && npm run build --workspace=packages/simulation && npm run build --workspace=apps/web",
     "test": "node --test tests/simulation.test.js"
   },
   "keywords": [
