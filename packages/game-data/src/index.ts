@@ -9,6 +9,7 @@ import {
 } from './economicConfig.js';
 
 export * from './economicConfig.js';
+export * from './bharatFrontConfig.js';
 
 function createInitialBudget(gdpUSD: number, debtUSD: number = Math.round(gdpUSD * 0.18)) {
   // Monthly State GDP

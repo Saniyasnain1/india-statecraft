@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BharatFront: Economic World — Grand Logistics Strategy</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  
+  <!-- D3.js v7 and TopoJSON client -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+  <style>
+    :root {
+      --bg-dark: #081421;
+      --panel-bg: rgba(14, 26, 43, 0.88);
+      --panel-border: rgba(56, 189, 248, 0.18);
+      --gold: #fbbf24;
+      --gold-glow: rgba(251, 191, 36, 0.35);
+      --cyan: #38bdf8;
+      --cyan-glow: rgba(56, 189, 248, 0.3);
+      --emerald: #34d399;
+      --crimson: #f87171;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-main);
+    }
+
+    /* Fullscreen Game Canvas */
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #game-canvas:active {
+      cursor: grabbing;
+    }
+
+    /* Top Navigation HUD */
+    #top-hud {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-card {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 8px 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-title {
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .state-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .gold-stat {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--gold);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-shadow: 0 0 12px var(--gold-glow);
+    }
+
+    .income-stat {
+      font-size: 12px;
+      color: var(--emerald);
+      font-weight: 600;
+    }
+
+    /* Live Trade Event Ticker */
+    #ticker-card {
+      flex: 1;
+      max-width: 480px;
+      height: 38px;
+      overflow: hidden;
+      position: relative;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+    }
+    #ticker-content {
+      white-space: nowrap;
+      animation: ticker-slide 20s linear infinite;
+      display: flex;
+      gap: 28px;
+    }
+    @keyframes ticker-slide {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ticker-highlight {
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    /* Camera & Controls Cluster */
+    .controls-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hud-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+    }
+    .hud-btn.active {
+      background: var(--gold);
+      color: #000;
+      border-color: var(--gold);
+      font-weight: 700;
+    }
+
+    /* Bottom Dock (Tools & Economy Allocation) */
+    #bottom-dock {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Economy Allocation Slider Widget */
+    #econ-slider-card {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 14px 18px;
+      width: 320px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .slider-track-wrap {
+      position: relative;
+      margin: 10px 0;
+    }
+
+    .econ-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #38bdf8 0%, #fbbf24 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    .econ-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5), 0 0 6px var(--gold);
+      cursor: pointer;
+      border: 2px solid var(--gold);
+      transition: transform 0.1s;
+    }
+    .econ-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .slider-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+    }
+    .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Building Construction Toolbar (Center Bottom) */
+    #build-toolbar {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    }
+
+    .build-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 85px;
+    }
+    .build-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+    .build-btn.selected {
+      background: rgba(251, 191, 36, 0.2);
+      border-color: var(--gold);
+      box-shadow: 0 0 16px var(--gold-glow);
+    }
+    .build-icon {
+      font-size: 22px;
+    }
+    .build-name {
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .build-cost {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    /* Right-Hand Collapsible Leaderboard */
+    #leaderboard-wrap {
+      position: absolute;
+      top: 74px;
+      right: 16px;
+      width: 320px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 160px);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 10;
+    }
+    #leaderboard-wrap.collapsed {
+      transform: translateX(calc(100% + 20px));
+    }
+
+    #leaderboard-toggle-btn {
+      position: absolute;
+      left: -38px;
+      top: 12px;
+      width: 34px;
+      height: 34px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px 0 0 8px;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: -4px 4px 12px rgba(0,0,0,0.3);
+      font-size: 14px;
+    }
+
+    .lb-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .lb-title {
+      font-weight: 800;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-main);
+    }
+    .lb-tabs {
+      display: flex;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 2px;
+      border-radius: 8px;
+    }
+    .lb-tab {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+    }
+    .lb-tab.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    .lb-list {
+      overflow-y: auto;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lb-row:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .lb-row.player-row {
+      background: rgba(251, 191, 36, 0.12);
+      border-color: rgba(251, 191, 36, 0.4);
+    }
+    .lb-rank {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      width: 24px;
+      color: var(--text-muted);
+    }
+    .lb-name {
+      font-weight: 600;
+      flex: 1;
+      margin-left: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lb-stat {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    /* Floating Popups & Modals */
+    .modal-backdrop {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(4, 9, 16, 0.75);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      width: 520px;
+      max-width: 90vw;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+      animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modal-pop {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 18px 20px;
+      overflow-y: auto;
+    }
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--cyan);
+    }
+
+    .suggestions-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .suggestion-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .suggestion-chip:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--cyan);
+    }
+
+    /* Floating Gold Canvas Popups */
+    .gold-float {
+      position: absolute;
+      pointer-events: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--gold);
+      text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 0 12px var(--gold-glow);
+      animation: float-up 1.4s ease-out forwards;
+      z-index: 50;
+    }
+    @keyframes float-up {
+      0% { opacity: 0; transform: translateY(0); }
+      15% { opacity: 1; transform: translateY(-8px); }
+      80% { opacity: 1; transform: translateY(-24px); }
+      100% { opacity: 0; transform: translateY(-36px); }
+    }
+
+    /* Searchable State Grid in Welcome Modal */
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+      margin-top: 12px;
+      padding-right: 4px;
+    }
+    .state-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .state-card:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+    .state-card.selected {
+      background: rgba(251, 191, 36, 0.2);
+      border-color: var(--gold);
+    }
+    .sc-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+    .sc-name {
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sc-info {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Selected Building Inspector Panel */
+    #building-inspector {
+      position: absolute;
+      left: 16px;
+      top: 74px;
+      width: 280px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+      padding: 14px;
+      z-index: 10;
+      display: none;
+    }
+    .bi-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .bi-title {
+      font-weight: 800;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .bi-level {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .bi-stats {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bi-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Notification Banner */
+    #notice-toast {
+      position: absolute;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(14, 26, 43, 0.95);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 80;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    #notice-toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fullscreen HTML5 Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Top Navigation & Information HUD -->
+  <div id="top-hud">
+    <!-- Brand & State Info Card -->
+    <div class="hud-card">
+      <div class="brand-title">
+        <span>⚡ BHARATFRONT</span>
+      </div>
+      <div class="state-badge" id="player-state-badge">
+        <span id="player-state-code">MH</span>
+        <span id="player-state-name">Maharashtra</span>
+      </div>
+      <div class="gold-stat">
+        <span>🪙</span>
+        <span id="hud-gold-val">750.0K</span>
+      </div>
+      <div class="income-stat" id="hud-income-rate">+2.4K/s</div>
+    </div>
+
+    <!-- Live Trade Event Ticker -->
+    <div class="hud-card" id="ticker-card">
+      <div id="ticker-content">
+        <span class="ticker-item">🌐 <span class="ticker-highlight">BharatFront: Economic World</span> initialized.</span>
+        <span class="ticker-item">🚢 International shipping routes active via Arabian Sea & Bay of Bengal.</span>
+        <span class="ticker-item">🚂 Railway logistics connected across states.</span>
+      </div>
+    </div>
+
+    <!-- Clock, Speed & Camera Controls -->
+    <div class="hud-card">
+      <!-- Camera Presets -->
+      <div class="controls-group">
+        <button class="hud-btn" id="btn-cam-state" title="Focus Selected State">🎯 My State</button>
+        <button class="hud-btn" id="btn-cam-india" title="India Overview">🇮🇳 All India</button>
+        <button class="hud-btn" id="btn-cam-world" title="Global View">🌍 World Map</button>
+      </div>
+
+      <!-- Simulation Speeds -->
+      <div class="controls-group" style="margin-left: 8px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 8px;">
+        <button class="hud-btn" id="btn-speed-pause" title="Pause Game">⏸</button>
+        <button class="hud-btn active" id="btn-speed-1x">1×</button>
+        <button class="hud-btn" id="btn-speed-2x">2×</button>
+        <button class="hud-btn" id="btn-speed-4x">4×</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Building Inspector Drawer (Floating Left) -->
+  <div id="building-inspector">
+    <div class="bi-header">
+      <div class="bi-title">
+        <span id="bi-icon">🏭</span>
+        <span id="bi-name">Pune Hub</span>
+      </div>
+      <span class="bi-level" id="bi-level">Level 1</span>
+    </div>
+    <div class="bi-stats" id="bi-stats">
+      <div>Type: <span class="metric-val" id="bi-type">Factory</span></div>
+      <div>Performance: <span class="metric-val" id="bi-perf">1.00× (+25%/lvl)</span></div>
+      <div>Station Payout: <span class="metric-val" id="bi-payout">+25,000 Gold</span></div>
+    </div>
+    <div class="bi-actions">
+      <button class="hud-btn active" id="bi-btn-upgrade" style="flex:1;">⬆ Upgrade (<span id="bi-upg-cost">450K</span>)</button>
+      <button class="hud-btn" id="bi-btn-close">✕</button>
+    </div>
+  </div>
+
+  <!-- Right Collapsible Leaderboard -->
+  <div id="leaderboard-wrap">
+    <button id="leaderboard-toggle-btn" title="Toggle Leaderboard">📊</button>
+    <div class="lb-header">
+      <span class="lb-title">Economic Leaderboard</span>
+      <div class="lb-tabs">
+        <button class="lb-tab active" id="tab-lb-india">India</button>
+        <button class="lb-tab" id="tab-lb-world">World</button>
+      </div>
+    </div>
+    <div class="lb-list" id="lb-items">
+      <!-- Injected dynamically -->
+    </div>
+  </div>
+
+  <!-- Bottom HUD: Economy Allocation & Building Construction Tools -->
+  <div id="bottom-dock">
+    <!-- Economy Allocation Slider Widget -->
+    <div id="econ-slider-card">
+      <div class="slider-header">
+        <span style="color: var(--cyan);">Civic Growth</span>
+        <span style="color: var(--gold);">Workers / Industry</span>
+      </div>
+      <div class="slider-track-wrap">
+        <input type="range" min="0" max="100" value="50" class="econ-slider" id="econ-slider" />
+      </div>
+      <div class="slider-labels">
+        <span id="slider-civic-pct">50% Civic</span>
+        <span id="slider-worker-pct">50% Workers</span>
+      </div>
+      <div class="slider-metrics">
+        <div>Pop: <span class="metric-val" id="hud-pop-val">124.5M</span></div>
+        <div>Max Pop: <span class="metric-val" id="hud-maxpop-val">150.0M</span></div>
+        <div>Passive: <span class="metric-val" id="hud-passive-rate">+1,200/s</span></div>
+        <div>Efficiency: <span class="metric-val" id="hud-efficiency-val">1.00×</span></div>
+      </div>
+    </div>
+
+    <!-- Center Building Construction Toolbar -->
+    <div id="build-toolbar">
+      <button class="build-btn" data-type="city" title="Build City & Railway Station (+250k Max Pop)">
+        <span class="build-icon">🏙️</span>
+        <span class="build-name">City</span>
+        <span class="build-cost" id="cost-city">600K</span>
+      </button>
+      <button class="build-btn" data-type="factory" title="Build Factory (Spawns Cargo Trains)">
+        <span class="build-icon">🏭</span>
+        <span class="build-name">Factory</span>
+        <span class="build-cost" id="cost-factory">700K</span>
+      </button>
+      <button class="build-btn" data-type="river_dock" title="Build River Dock (Navigable Inland Riverfront)">
+        <span class="build-icon">⚓</span>
+        <span class="build-name">River Dock</span>
+        <span class="build-cost" id="cost-river_dock">350K</span>
+      </button>
+      <button class="build-btn" data-type="port" title="Build Deep Sea Port (Coastal Shipping Hub)">
+        <span class="build-icon">🚢</span>
+        <span class="build-name">Sea Port</span>
+        <span class="build-cost" id="cost-port">850K</span>
+      </button>
+      <button class="build-btn" id="btn-diplomacy-dock" title="Diplomacy & Trade Pacts">
+        <span class="build-icon">🤝</span>
+        <span class="build-name">Diplomacy</span>
+        <span class="build-cost" style="color:var(--cyan);">Manage</span>
+      </button>
+    </div>
+
+    <!-- Spacer to balance layout -->
+    <div style="width: 320px;"></div>
+  </div>
+
+  <!-- In-Game Notification Toast -->
+  <div id="notice-toast">
+    <span id="notice-icon">ℹ️</span>
+    <span id="notice-text">Welcome to BharatFront: Economic World</span>
+  </div>
+
+  <!-- State Selection Modal (Initial Launch) -->
+  <div class="modal-backdrop" id="state-select-modal" style="display: flex;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">Select Your Starting Indian State or UT</div>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Choose an Indian state to lead in economic development, inland waterway navigation, railway logistics, and international maritime trade.
+        </p>
+        <div class="form-group">
+          <input type="text" class="form-input" id="state-search-input" placeholder="🔍 Search state, union territory, or capital..." />
+        </div>
+        <div class="state-grid" id="state-selection-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="hud-btn active" id="btn-confirm-state" style="padding: 10px 24px; font-size: 13px;">Enter BharatFront</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- City Construction Naming Modal -->
+  <div class="modal-backdrop" id="city-naming-modal" style="display: none;">
+    <div class="modal-box" style="width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title">Found New City & Rail Station</div>
+        <button class="modal-close" id="btn-close-city-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">City Name (Must be globally unique)</label>
+          <input type="text" class="form-input" id="city-name-input" placeholder="e.g. Pune" />
+          <div style="font-size: 11px; color: var(--crimson); margin-top: 4px; display: none;" id="city-name-error">Name already in use. Please pick another.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Suggested Names for this State</label>
+          <div class="suggestions-list" id="city-suggestions-pool">
+            <!-- Injected -->
+          </div>
+        </div>
+        <div style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 10px; font-size: 12px; color: var(--text-muted); margin-top: 10px;">
+          <div>💰 Construction Cost: <span class="metric-val" id="cn-cost" style="color:var(--gold);">600K Gold</span></div>
+          <div>👥 Max Population Bonus: <span class="metric-val" style="color:var(--emerald);">+250,000 / Level</span></div>
+          <div>🚂 Serves as station for regional trade and trains.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="hud-btn" id="btn-cancel-city">Cancel</button>
+        <button class="hud-btn active" id="btn-confirm-city">Construct City</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diplomacy & Trade Pact Modal -->
+  <div class="modal-backdrop" id="diplomacy-modal" style="display: none;">
+    <div class="modal-box" style="width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="diplo-title">Diplomacy: Gujarat</div>
+        <button class="modal-close" id="btn-close-diplo">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 14px; margin-bottom: 14px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 10px;">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted);">Status</div>
+            <div style="font-weight: 700; color: var(--cyan);" id="diplo-status">Neutral</div>
+          </div>
+          <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 14px;">
+            <div style="font-size: 11px; color: var(--text-muted);">Trade Revenue Multiplier</div>
+            <div style="font-weight: 700; color: var(--gold);" id="diplo-multiplier">1.00×</div>
+          </div>
+          <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 14px;">
+            <div style="font-size: 11px; color: var(--text-muted);">Coast / Ports</div>
+            <div style="font-weight: 700;" id="diplo-coast">Coastal (Has Port)</div>
+          </div>
+        </div>
+        
+        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;" id="diplo-desc">
+          Sign a Trade Pact to boost rail/river trade to +40,000 Gold and maritime trade to +55,000 Gold. If your state is landlocked, a Trade Pact unlocks chartered international cargo shipping via their ports!
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="hud-btn active" id="btn-diplo-pact" style="justify-content: center; padding: 12px;">🤝 Propose Trade Pact (+40K/+55K Gold)</button>
+          <button class="hud-btn" id="btn-diplo-charter" style="justify-content: center; padding: 10px; border-color: var(--cyan); display: none;">🚢 Dispatch Chartered Sea Boat (Fee: 12,000 Gold)</button>
+          <button class="hud-btn" id="btn-diplo-embargo" style="justify-content: center; padding: 10px; color: var(--crimson);">🚫 Issue Trade Embargo (0 Gold / Avoided)</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="hud-btn" id="btn-close-diplo-footer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Master Game Script (Self-Contained) -->
+  <script>
+    /**
+     * BHARATFRONT: ECONOMIC WORLD — MASTER GAME ENGINE
+     * Universal Currency: Gold
+     */
+
+    // --- 1. CONFIGURATION & BALANCING CONSTANTS ---
+    const CONFIG = {
+      CURRENCY: 'Gold',
+      STARTING_GOLD: 750000,
+      BASE_COSTS: {
+        city: 600000,
+        factory: 700000,
+        river_dock: 350000,
+        port: 850000,
+      },
+      COST_FACTOR: 1.6,
+      COST_CAP: 10000000,
+      MAX_LEVEL: 10,
+      UPGRADE_BONUS: 0.25,
+      POP_PER_CITY_LEVEL: 250000,
+      PAYOUTS: {
+        OWN: 10000,
+        NEUTRAL: 25000,
+        PACT_RAIL: 40000,
+        PACT_SEA: 55000,
+        EMBARGO: 0,
+      },
+      CHARTER_FEE: 12000,
+      TRAIN_K: 1.25,
+      TERRITORY_CAPS: {
+        small: { maxCities: 2, maxFactories: 2 },
+        medium: { maxCities: 4, maxFactories: 4 },
+        large: { maxCities: 6, maxFactories: 5 },
+      }
+    };
+
+    // --- 2. TEN ACCURATE NAVIGABLE INDIAN RIVERS ---
+    const RIVERS = {
+      ganga: {
+        name: 'Ganga River',
+        coords: [
+          [78.60, 30.15], [78.16, 29.94], [78.85, 28.90], [80.33, 26.45],
+          [81.84, 25.43], [82.97, 25.31], [83.98, 25.68], [85.14, 25.61],
+          [86.97, 25.25], [87.92, 24.80], [88.10, 22.50], [88.15, 22.02],
+          [88.25, 21.65]
+        ]
+      },
+      yamuna: {
+        name: 'Yamuna River',
+        coords: [
+          [78.46, 31.01], [77.50, 30.20], [77.22, 28.61], [77.67, 27.49],
+          [78.01, 27.18], [79.02, 26.75], [80.35, 25.90], [81.84, 25.43]
+        ]
+      },
+      brahmaputra: {
+        name: 'Brahmaputra River',
+        coords: [
+          [95.30, 28.10], [94.91, 27.47], [93.75, 26.85], [92.80, 26.65],
+          [91.73, 26.14], [90.65, 26.18], [89.97, 26.02], [89.70, 25.15],
+          [90.45, 23.50], [90.50, 22.20]
+        ]
+      },
+      godavari: {
+        name: 'Godavari River',
+        coords: [
+          [73.79, 19.99], [74.75, 19.80], [76.05, 19.35], [77.31, 19.15],
+          [78.09, 18.67], [79.80, 18.75], [80.85, 17.65], [81.78, 17.00],
+          [82.20, 16.50]
+        ]
+      },
+      krishna: {
+        name: 'Krishna River',
+        coords: [
+          [73.66, 17.92], [74.57, 16.85], [75.90, 16.20], [77.35, 16.25],
+          [78.55, 16.10], [80.05, 16.60], [80.64, 16.50], [80.90, 15.80]
+        ]
+      },
+      narmada: {
+        name: 'Narmada River',
+        coords: [
+          [81.75, 22.67], [80.50, 22.85], [79.93, 23.18], [78.20, 22.80],
+          [76.50, 22.25], [74.50, 21.95], [72.98, 21.70], [72.60, 21.60]
+        ]
+      },
+      tapi: {
+        name: 'Tapi River',
+        coords: [
+          [78.25, 21.77], [76.50, 21.35], [75.30, 21.20], [73.80, 21.30],
+          [72.83, 21.17], [72.70, 21.10]
+        ]
+      },
+      mahanadi: {
+        name: 'Mahanadi River',
+        coords: [
+          [81.90, 20.30], [81.80, 21.15], [82.80, 21.40], [83.97, 21.46],
+          [84.85, 20.80], [85.88, 20.46], [86.60, 20.30]
+        ]
+      },
+      kaveri: {
+        name: 'Kaveri River',
+        coords: [
+          [75.49, 12.38], [76.69, 12.42], [77.70, 12.05], [78.15, 11.45],
+          [78.69, 10.79], [79.50, 10.95], [79.85, 11.14]
+        ]
+      },
+      sutlej: {
+        name: 'Sutlej River',
+        coords: [
+          [78.60, 31.50], [77.50, 31.30], [76.43, 31.41], [75.80, 30.90],
+          [74.90, 31.10], [74.30, 31.10]
+        ]
+      }
+    };
+
+    // --- 3. GLOBAL OCEAN WAYPOINT NETWORK ---
+    const SEA_WAYPOINTS = {
+      mumbai_port: [72.85, 18.95],
+      kandla_port: [70.22, 23.00],
+      kochi_port: [76.27, 9.97],
+      chennai_port: [80.30, 13.08],
+      vizag_port: [83.30, 17.70],
+      kolkata_port: [88.10, 22.02],
+      arabian_sea: [68.0, 16.5],
+      bay_of_bengal: [88.0, 14.0],
+      strait_of_hormuz: [56.3, 26.3],
+      dubai_port: [55.27, 25.20],
+      bab_el_mandeb: [43.4, 12.6],
+      suez_canal: [32.5, 29.9],
+      gibraltar: [-5.6, 35.9],
+      english_channel: [0.0, 50.5],
+      rotterdam_port: [4.48, 51.92],
+      london_port: [0.12, 51.50],
+      new_york_port: [-74.00, 40.71],
+      strait_of_malacca: [98.0, 4.0],
+      singapore_port: [103.82, 1.35],
+      shanghai_port: [121.50, 31.23],
+      tokyo_port: [139.75, 35.68],
+      cape_of_good_hope: [18.5, -34.4],
+      sydney_port: [151.21, -33.87],
+    };
+
+    // Sea shipping lane connections
+    const SEA_ROUTES = [
+      ['mumbai_port', 'arabian_sea'],
+      ['kandla_port', 'arabian_sea'],
+      ['kochi_port', 'arabian_sea'],
+      ['chennai_port', 'bay_of_bengal'],
+      ['vizag_port', 'bay_of_bengal'],
+      ['kolkata_port', 'bay_of_bengal'],
+      ['arabian_sea', 'bay_of_bengal'],
+      ['arabian_sea', 'strait_of_hormuz'],
+      ['strait_of_hormuz', 'dubai_port'],
+      ['arabian_sea', 'bab_el_mandeb'],
+      ['bab_el_mandeb', 'suez_canal'],
+      ['suez_canal', 'gibraltar'],
+      ['gibraltar', 'english_channel'],
+      ['english_channel', 'rotterdam_port'],
+      ['english_channel', 'london_port'],
+      ['english_channel', 'new_york_port'],
+      ['bay_of_bengal', 'strait_of_malacca'],
+      ['strait_of_malacca', 'singapore_port'],
+      ['singapore_port', 'shanghai_port'],
+      ['shanghai_port', 'tokyo_port'],
+      ['arabian_sea', 'cape_of_good_hope'],
+      ['strait_of_malacca', 'sydney_port'],
+    ];
+
+    // --- 4. INDIAN STATES & UT DATABASE ---
+    const INDIAN_TERRITORIES = {
+      MH: { name: 'Maharashtra', capital: 'Mumbai', size: 'large', coastal: true, centroid: [75.7, 19.7], bbox: [[72.6, 15.6], [80.9, 22.0]], pop: 124500000, cities: ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad'] },
+      GJ: { name: 'Gujarat', capital: 'Gandhinagar', size: 'large', coastal: true, centroid: [71.2, 22.2], bbox: [[68.1, 20.1], [74.5, 24.7]], pop: 69000000, cities: ['Gandhinagar', 'Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Kandla'] },
+      KA: { name: 'Karnataka', capital: 'Bengaluru', size: 'large', coastal: true, centroid: [75.7, 15.3], bbox: [[74.0, 11.5], [78.6, 18.5]], pop: 67500000, cities: ['Bengaluru', 'Mysuru', 'Hubballi', 'Mangaluru', 'Belagavi'] },
+      TN: { name: 'Tamil Nadu', capital: 'Chennai', size: 'large', coastal: true, centroid: [78.6, 11.1], bbox: [[76.2, 8.1], [80.3, 13.6]], pop: 76500000, cities: ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem'] },
+      UP: { name: 'Uttar Pradesh', capital: 'Lucknow', size: 'large', coastal: false, centroid: [80.9, 26.8], bbox: [[77.1, 23.8], [84.6, 30.4]], pop: 235000000, cities: ['Lucknow', 'Kanpur', 'Varanasi', 'Agra', 'Prayagraj', 'Noida'] },
+      WB: { name: 'West Bengal', capital: 'Kolkata', size: 'large', coastal: true, centroid: [87.8, 22.9], bbox: [[85.8, 21.5], [89.9, 27.2]], pop: 98000000, cities: ['Kolkata', 'Howrah', 'Durgapur', 'Asansol', 'Siliguri', 'Haldia'] },
+      AP: { name: 'Andhra Pradesh', capital: 'Amaravati', size: 'large', coastal: true, centroid: [79.7, 15.9], bbox: [[76.8, 12.6], [84.8, 19.1]], pop: 53000000, cities: ['Amaravati', 'Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati'] },
+      TS: { name: 'Telangana', capital: 'Hyderabad', size: 'medium', coastal: false, centroid: [79.0, 17.8], bbox: [[77.2, 15.8], [81.3, 19.9]], pop: 38000000, cities: ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar'] },
+      KL: { name: 'Kerala', capital: 'Thiruvananthapuram', size: 'medium', coastal: true, centroid: [76.2, 10.8], bbox: [[74.9, 8.3], [77.4, 12.8]], pop: 35500000, cities: ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur'] },
+      RJ: { name: 'Rajasthan', capital: 'Jaipur', size: 'large', coastal: false, centroid: [74.2, 27.0], bbox: [[69.5, 23.1], [78.3, 30.2]], pop: 80000000, cities: ['Jaipur', 'Jodhpur', 'Kota', 'Bikaner', 'Udaipur'] },
+      MP: { name: 'Madhya Pradesh', capital: 'Bhopal', size: 'large', coastal: false, centroid: [77.4, 23.2], bbox: [[74.0, 21.1], [82.8, 26.9]], pop: 85000000, cities: ['Bhopal', 'Indore', 'Gwalior', 'Jabalpur', 'Ujjain'] },
+      BR: { name: 'Bihar', capital: 'Patna', size: 'large', coastal: false, centroid: [85.3, 25.6], bbox: [[83.3, 24.3], [88.3, 27.5]], pop: 125000000, cities: ['Patna', 'Gaya', 'Bhagalpur', 'Muzaffarpur'] },
+      PB: { name: 'Punjab', capital: 'Amritsar', size: 'medium', coastal: false, centroid: [75.3, 31.1], bbox: [[73.9, 29.5], [76.9, 32.5]], pop: 30000000, cities: ['Amritsar', 'Ludhiana', 'Jalandhar', 'Patiala', 'Mohali'] },
+      HR: { name: 'Haryana', capital: 'Gurugram', size: 'medium', coastal: false, centroid: [76.3, 29.0], bbox: [[74.5, 27.6], [77.6, 30.9]], pop: 29000000, cities: ['Gurugram', 'Faridabad', 'Panipat', 'Ambala', 'Panchkula'] },
+      OD: { name: 'Odisha', capital: 'Bhubaneswar', size: 'large', coastal: true, centroid: [85.0, 20.9], bbox: [[81.4, 17.8], [87.5, 22.6]], pop: 45000000, cities: ['Bhubaneswar', 'Cuttack', 'Rourkela', 'Sambalpur', 'Paradip'] },
+      JH: { name: 'Jharkhand', capital: 'Ranchi', size: 'medium', coastal: false, centroid: [85.3, 23.6], bbox: [[83.3, 21.9], [87.9, 25.3]], pop: 39000000, cities: ['Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro'] },
+      AS: { name: 'Assam', capital: 'Dispur', size: 'medium', coastal: false, centroid: [92.9, 26.2], bbox: [[89.7, 24.1], [96.0, 28.2]], pop: 35000000, cities: ['Dispur', 'Guwahati', 'Silchar', 'Dibrugarh'] },
+      CG: { name: 'Chhattisgarh', capital: 'Raipur', size: 'medium', coastal: false, centroid: [81.8, 21.2], bbox: [[80.2, 17.8], [84.4, 24.1]], pop: 30000000, cities: ['Raipur', 'Bhilai', 'Bilaspur', 'Korba'] },
+      UK: { name: 'Uttarakhand', capital: 'Dehradun', size: 'medium', coastal: false, centroid: [79.0, 30.0], bbox: [[77.6, 28.7], [81.0, 31.5]], pop: 11500000, cities: ['Dehradun', 'Haridwar', 'Roorkee', 'Haldwani'] },
+      HP: { name: 'Himachal Pradesh', capital: 'Shimla', size: 'medium', coastal: false, centroid: [77.1, 31.1], bbox: [[75.6, 30.4], [79.0, 33.2]], pop: 7500000, cities: ['Shimla', 'Dharamshala', 'Mandi', 'Solan'] },
+      GA: { name: 'Goa', capital: 'Panaji', size: 'small', coastal: true, centroid: [74.0, 15.3], bbox: [[73.7, 14.9], [74.3, 15.8]], pop: 1600000, cities: ['Panaji', 'Margao', 'Vasco da Gama'] },
+      TR: { name: 'Tripura', capital: 'Agartala', size: 'small', coastal: false, centroid: [91.7, 23.8], bbox: [[91.1, 22.9], [92.3, 24.5]], pop: 4000000, cities: ['Agartala', 'Dharmanagar'] },
+      ML: { name: 'Meghalaya', capital: 'Shillong', size: 'small', coastal: false, centroid: [91.3, 25.5], bbox: [[89.8, 25.0], [92.8, 26.1]], pop: 3300000, cities: ['Shillong', 'Tura'] },
+      MN: { name: 'Manipur', capital: 'Imphal', size: 'small', coastal: false, centroid: [93.9, 24.8], bbox: [[93.0, 23.8], [94.8, 25.7]], pop: 3200000, cities: ['Imphal', 'Thoubal'] },
+      NL: { name: 'Nagaland', capital: 'Kohima', size: 'small', coastal: false, centroid: [94.5, 26.1], bbox: [[93.3, 25.1], [95.3, 27.0]], pop: 2200000, cities: ['Kohima', 'Dimapur'] },
+      MZ: { name: 'Mizoram', capital: 'Aizawl', size: 'small', coastal: false, centroid: [92.9, 23.1], bbox: [[92.2, 21.9], [93.4, 24.5]], pop: 1250000, cities: ['Aizawl', 'Lunglei'] },
+      SK: { name: 'Sikkim', capital: 'Gangtok', size: 'small', coastal: false, centroid: [88.5, 27.5], bbox: [[88.0, 27.0], [88.9, 28.1]], pop: 700000, cities: ['Gangtok', 'Namchi'] },
+      AR: { name: 'Arunachal Pradesh', capital: 'Itanagar', size: 'medium', coastal: false, centroid: [94.7, 28.2], bbox: [[91.5, 26.6], [97.4, 29.5]], pop: 1600000, cities: ['Itanagar', 'Pasighat'] },
+      // UTs
+      DL: { name: 'Delhi', capital: 'New Delhi', size: 'small', coastal: false, centroid: [77.2, 28.6], bbox: [[76.8, 28.4], [77.4, 28.9]], pop: 20000000, cities: ['New Delhi', 'Dwarka'] },
+      JK: { name: 'Jammu & Kashmir', capital: 'Srinagar', size: 'medium', coastal: false, centroid: [74.8, 33.7], bbox: [[73.5, 32.3], [76.5, 35.5]], pop: 13500000, cities: ['Srinagar', 'Jammu'] },
+      LA: { name: 'Ladakh', capital: 'Leh', size: 'medium', coastal: false, centroid: [77.5, 34.2], bbox: [[75.5, 32.5], [80.0, 36.0]], pop: 300000, cities: ['Leh', 'Kargil'] },
+      CH: { name: 'Chandigarh', capital: 'Chandigarh', size: 'small', coastal: false, centroid: [76.77, 30.73], bbox: [[76.7, 30.7], [76.85, 30.8]], pop: 1200000, cities: ['Chandigarh'] },
+      PY: { name: 'Puducherry', capital: 'Puducherry', size: 'small', coastal: true, centroid: [79.8, 11.9], bbox: [[79.7, 11.8], [79.9, 12.0]], pop: 1400000, cities: ['Puducherry'] },
+      AN: { name: 'Andaman & Nicobar', capital: 'Port Blair', size: 'small', coastal: true, centroid: [92.7, 11.6], bbox: [[92.0, 6.7], [94.0, 13.7]], pop: 400000, cities: ['Port Blair'] },
+      LD: { name: 'Lakshadweep', capital: 'Kavaratti', size: 'small', coastal: true, centroid: [72.6, 10.5], bbox: [[71.5, 8.0], [74.0, 12.5]], pop: 70000, cities: ['Kavaratti'] },
+      DNHDD: { name: 'Dadra & Nagar Haveli', capital: 'Daman', size: 'small', coastal: true, centroid: [72.9, 20.4], bbox: [[72.8, 20.2], [73.2, 20.5]], pop: 600000, cities: ['Daman', 'Silvassa'] },
+    };
+
+    // Major World Powers for global competition and trade
+    const WORLD_POWERS = {
+      USA: { name: 'United States', capital: 'Washington', centroid: [-98.5, 39.8], pop: 335000000, port: 'new_york_port' },
+      CHN: { name: 'China', capital: 'Beijing', centroid: [104.1, 35.8], pop: 1410000000, port: 'shanghai_port' },
+      JPN: { name: 'Japan', capital: 'Tokyo', centroid: [138.2, 36.2], pop: 125000000, port: 'tokyo_port' },
+      GBR: { name: 'United Kingdom', capital: 'London', centroid: [-3.4, 55.3], pop: 67000000, port: 'london_port' },
+      DEU: { name: 'Germany', capital: 'Berlin', centroid: [10.4, 51.1], pop: 83000000, port: 'rotterdam_port' },
+      ARE: { name: 'United Arab Emirates', capital: 'Abu Dhabi', centroid: [54.3, 23.4], pop: 10000000, port: 'dubai_port' },
+      SGP: { name: 'Singapore', capital: 'Singapore', centroid: [103.8, 1.3], pop: 5900000, port: 'singapore_port' },
+      AUS: { name: 'Australia', capital: 'Canberra', centroid: [133.7, -25.2], pop: 26000000, port: 'sydney_port' },
+      NLD: { name: 'Netherlands', capital: 'Amsterdam', centroid: [5.2, 52.1], pop: 17500000, port: 'rotterdam_port' },
+    };
+
+    // --- 5. GAME STATE MODEL ---
+    class GameEngine {
+      constructor() {
+        this.playerStateCode = 'MH';
+        this.gold = CONFIG.STARTING_GOLD;
+        this.speed = 1;
+        this.isPaused = false;
+        this.lastTime = performance.now();
+        
+        // Economy allocation: 0 = 100% Civic, 100 = 100% Workers
+        this.workerRatio = 0.5;
+
+        // Global unique city names set
+        this.usedCityNames = new Set();
+
+        // Territory State Tracker
+        this.territories = {};
+        this.worldPowers = {};
+
+        // Active Buildings, Transports, Floating Popups
+        this.buildings = [];     // { id, ownerCode, type, level, lon, lat, name }
+        this.transports = [];    // { id, type, ownerCode, lon, lat, targetLon, targetLat, path, pathIdx, progress, speed, cargoGold, fromTerritory, toTerritory }
+        this.floatPopups = [];   // { id, text, x, y, life }
+        this.diplomacy = {};     // key: territoryCode -> { pact: bool, embargo: bool }
+
+        // Selected tools
+        this.activeTool = null;  // 'city' | 'factory' | 'river_dock' | 'port'
+        this.selectedBuilding = null;
+        this.inspectingTerritory = null;
+
+        // Map projection & transform
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.projection = d3.geoMercator()
+          .center([78.96, 22.59])
+          .scale(1000)
+          .translate([this.width / 2, this.height / 2]);
+
+        this.zoomTransform = d3.zoomIdentity;
+        this.initWorld();
+      }
+
+      initWorld() {
+        // Initialize Indian territories
+        for (const [code, data] of Object.entries(INDIAN_TERRITORIES)) {
+          this.territories[code] = {
+            code,
+            name: data.name,
+            gold: Math.round(CONFIG.STARTING_GOLD * (data.size === 'large' ? 1.4 : data.size === 'medium' ? 1.0 : 0.6)),
+            population: data.pop,
+            maxPopulation: Math.round(data.pop * 1.2),
+            workerRatio: 0.5,
+            buildingsCount: { city: 0, factory: 0, river_dock: 0, port: 0 },
+            isCoastal: data.coastal,
+            centroid: data.centroid,
+            bbox: data.bbox,
+            size: data.size,
+          };
+          this.diplomacy[code] = { pact: false, embargo: false };
+
+          // Pre-populate starting capital city
+          this.addBuilding({
+            ownerCode: code,
+            type: 'city',
+            level: 1,
+            lon: data.centroid[0],
+            lat: data.centroid[1],
+            name: data.capital,
+          });
+        }
+
+        // Initialize World Powers
+        for (const [code, data] of Object.entries(WORLD_POWERS)) {
+          this.worldPowers[code] = {
+            code,
+            name: data.name,
+            gold: 3000000,
+            population: data.pop,
+            portWaypoint: data.port,
+          };
+          this.diplomacy[code] = { pact: false, embargo: false };
+        }
+
+        // Add starting factory for player and major states
+        this.addBuilding({
+          ownerCode: 'MH',
+          type: 'factory',
+          level: 1,
+          lon: 73.85,
+          lat: 18.52,
+          name: 'Pune Industrial Works',
+        });
+        this.addBuilding({
+          ownerCode: 'MH',
+          type: 'port',
+          level: 1,
+          lon: 72.85,
+          lat: 18.95,
+          name: 'Jawaharlal Nehru Port',
+        });
+      }
+
+      addBuilding(b) {
+        // Enforce unique city names
+        if (b.type === 'city') {
+          const lower = b.name.trim().toLowerCase();
+          if (this.usedCityNames.has(lower)) {
+            return false;
+          }
+          this.usedCityNames.add(lower);
+        }
+
+        b.id = 'bld_' + Math.random().toString(36).substring(2, 9);
+        b.level = b.level || 1;
+        this.buildings.push(b);
+
+        if (this.territories[b.ownerCode]) {
+          this.territories[b.ownerCode].buildingsCount[b.type] = (this.territories[b.ownerCode].buildingsCount[b.type] || 0) + 1;
+          if (b.type === 'city') {
+            this.territories[b.ownerCode].maxPopulation += CONFIG.POP_PER_CITY_LEVEL;
+          }
+        }
+        return true;
+      }
+
+      getBuildingCost(type, ownerCode) {
+        const count = this.territories[ownerCode]?.buildingsCount[type] || 0;
+        const base = CONFIG.BASE_COSTS[type] || 500000;
+        const cost = base * Math.pow(CONFIG.COST_FACTOR, count);
+        return Math.min(Math.round(cost), CONFIG.COST_CAP);
+      }
+
+      getUpgradeCost(building) {
+        if (building.level >= CONFIG.MAX_LEVEL) return Infinity;
+        const base = CONFIG.BASE_COSTS[building.type] || 500000;
+        const cost = base * 0.75 * Math.pow(1.35, building.level);
+        return Math.min(Math.round(cost), CONFIG.COST_CAP);
+      }
+
+      upgradeBuilding(building) {
+        if (building.level >= CONFIG.MAX_LEVEL) return false;
+        const cost = this.getUpgradeCost(building);
+        const owner = this.territories[building.ownerCode];
+        if (!owner || (building.ownerCode === this.playerStateCode ? this.gold : owner.gold) < cost) {
+          return false;
+        }
+
+        if (building.ownerCode === this.playerStateCode) {
+          this.gold -= cost;
+        } else {
+          owner.gold -= cost;
+        }
+
+        building.level++;
+        if (building.type === 'city') {
+          owner.maxPopulation += CONFIG.POP_PER_CITY_LEVEL;
+        }
+        return true;
+      }
+
+      // Check distance to river
+      isNearRiver(lon, lat, maxDistanceKm = 80) {
+        for (const [key, river] of Object.entries(RIVERS)) {
+          for (const [rLon, rLat] of river.coords) {
+            const d = this.haversineDistance(lon, lat, rLon, rLat);
+            if (d <= maxDistanceKm) return true;
+          }
+        }
+        return false;
+      }
+
+      // Check distance to coast
+      isNearCoast(lon, lat, maxDistanceKm = 85) {
+        for (const [wpKey, wp] of Object.entries(SEA_WAYPOINTS)) {
+          if (wpKey.includes('port')) {
+            const d = this.haversineDistance(lon, lat, wp[0], wp[1]);
+            if (d <= maxDistanceKm) return true;
+          }
+        }
+        return false;
+      }
+
+      haversineDistance(lon1, lat1, lon2, lat2) {
+        const R = 6371; // Earth radius km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
+
+      // Simulation Step (Delta time)
+      tick(deltaMs) {
+        if (this.isPaused || this.speed === 0) return;
+        const dt = (deltaMs / 1000) * this.speed;
+
+        // 1. Passive Income & Population updates
+        const playerT = this.territories[this.playerStateCode];
+        if (playerT) {
+          // Diminishing returns: output ∝ workers^0.78
+          const totalWorkers = playerT.population * this.workerRatio;
+          const industrialOutput = Math.pow(Math.max(1, totalWorkers / 1000), 0.78);
+          const passiveGoldSec = 250 + (industrialOutput * 12);
+          this.gold += passiveGoldSec * dt;
+
+          // Population growth influenced by Civic Allocation
+          const civicRatio = 1 - this.workerRatio;
+          const growthRate = 0.002 * (0.5 + civicRatio);
+          if (playerT.population < playerT.maxPopulation) {
+            playerT.population += playerT.population * growthRate * dt;
+          }
+        }
+
+        // 2. AI States passive collection & progression
+        for (const [code, t] of Object.entries(this.territories)) {
+          if (code === this.playerStateCode) continue;
+          const w = t.population * t.workerRatio;
+          t.gold += (200 + Math.pow(Math.max(1, w / 1000), 0.78) * 10) * dt;
+          if (t.population < t.maxPopulation) {
+            t.population += t.population * 0.002 * dt;
+          }
+          // AI Construction chance
+          if (Math.random() < 0.002 * dt && t.gold > 1000000) {
+            this.aiConstruct(t);
+          }
+        }
+
+        // 3. Train Spawning from Factories
+        for (const b of this.buildings) {
+          if (b.type === 'factory') {
+            const ownerT = this.territories[b.ownerCode];
+            const factoryCount = ownerT?.buildingsCount?.factory || 1;
+            // Formula: chance = level / ((factories + 8) * k)
+            const spawnChance = (b.level / ((factoryCount + 8) * CONFIG.TRAIN_K)) * 0.15 * dt;
+            if (Math.random() < spawnChance) {
+              this.spawnTrain(b);
+            }
+          } else if (b.type === 'river_dock') {
+            if (Math.random() < 0.08 * b.level * dt) {
+              this.spawnRiverBoat(b);
+            }
+          } else if (b.type === 'port') {
+            if (Math.random() < 0.05 * b.level * dt) {
+              this.spawnCargoShip(b);
+            }
+          }
+        }
+
+        // 4. Update Moving Transports
+        for (let i = this.transports.length - 1; i >= 0; i--) {
+          const t = this.transports[i];
+          t.progress += t.speed * dt;
+
+          if (t.progress >= 1.0) {
+            t.pathIdx++;
+            if (t.pathIdx >= t.path.length - 1) {
+              // Journey Complete -> Award Payout
+              this.handleTransportArrival(t);
+              this.transports.splice(i, 1);
+              continue;
+            } else {
+              t.progress = 0;
+            }
+          }
+
+          // Interpolate position along current segment
+          const p1 = t.path[t.pathIdx];
+          const p2 = t.path[t.pathIdx + 1];
+          if (p1 && p2) {
+            t.lon = p1[0] + (p2[0] - p1[0]) * t.progress;
+            t.lat = p1[1] + (p2[1] - p1[1]) * t.progress;
+          }
+        }
+      }
+
+      spawnTrain(factory) {
+        // Find destination station in own or allied/neutral territory
+        const candidates = this.buildings.filter(b => (b.type === 'city' || b.type === 'port' || b.type === 'river_dock') && b.id !== factory.id);
+        if (candidates.length === 0) return;
+        const dest = candidates[Math.floor(Math.random() * candidates.length)];
+
+        // Route must avoid embargoed territories
+        if (this.diplomacy[dest.ownerCode]?.embargo) return;
+
+        this.transports.push({
+          id: 'train_' + Math.random().toString(36).substring(2, 7),
+          type: 'train',
+          ownerCode: factory.ownerCode,
+          fromTerritory: factory.ownerCode,
+          toTerritory: dest.ownerCode,
+          lon: factory.lon,
+          lat: factory.lat,
+          path: [[factory.lon, factory.lat], [dest.lon, dest.lat]],
+          pathIdx: 0,
+          progress: 0,
+          speed: 0.15, // speed along segment
+          multiplier: 1 + (factory.level - 1) * CONFIG.UPGRADE_BONUS,
+        });
+      }
+
+      spawnRiverBoat(dock) {
+        // Pick connected river nodes
+        const riverKeys = Object.keys(RIVERS);
+        const rKey = riverKeys[Math.floor(Math.random() * riverKeys.length)];
+        const river = RIVERS[rKey];
+
+        this.transports.push({
+          id: 'boat_' + Math.random().toString(36).substring(2, 7),
+          type: 'river_boat',
+          ownerCode: dock.ownerCode,
+          fromTerritory: dock.ownerCode,
+          toTerritory: dock.ownerCode,
+          lon: dock.lon,
+          lat: dock.lat,
+          path: [[dock.lon, dock.lat], ...river.coords],
+          pathIdx: 0,
+          progress: 0,
+          speed: 0.08,
+          multiplier: 1 + (dock.level - 1) * CONFIG.UPGRADE_BONUS,
+        });
+      }
+
+      spawnCargoShip(port, destinationCode = null) {
+        // Pick foreign port destination
+        const foreignWpKeys = ['dubai_port', 'singapore_port', 'rotterdam_port', 'london_port', 'new_york_port', 'tokyo_port'];
+        const destKey = foreignWpKeys[Math.floor(Math.random() * foreignWpKeys.length)];
+        const destCoord = SEA_WAYPOINTS[destKey];
+
+        // Sea route path via waypoints
+        const path = [[port.lon, port.lat], SEA_WAYPOINTS.arabian_sea, destCoord];
+
+        this.transports.push({
+          id: 'ship_' + Math.random().toString(36).substring(2, 7),
+          type: 'cargo_ship',
+          ownerCode: port.ownerCode,
+          fromTerritory: port.ownerCode,
+          toTerritory: destinationCode || 'USA',
+          lon: port.lon,
+          lat: port.lat,
+          path,
+          pathIdx: 0,
+          progress: 0,
+          speed: 0.04,
+          multiplier: 1 + (port.level - 1) * CONFIG.UPGRADE_BONUS,
+        });
+      }
+
+      // Landlocked State Chartered Sea Boat
+      dispatchCharteredSeaBoat(landlockedCode, coastalCode) {
+        const coastalOwner = this.territories[coastalCode];
+        if (!coastalOwner || !coastalOwner.isCoastal) return false;
+        
+        // Find coastal state port
+        const coastalPort = this.buildings.find(b => b.ownerCode === coastalCode && b.type === 'port');
+        if (!coastalPort) return false;
+
+        // Coastal ally receives immediate 12,000 Gold Port Transit Fee
+        if (coastalCode === this.playerStateCode) {
+          this.gold += CONFIG.CHARTER_FEE;
+        } else {
+          coastalOwner.gold += CONFIG.CHARTER_FEE;
+        }
+
+        // Spawn chartered vessel marked with landlocked state badge
+        this.spawnCargoShip(coastalPort);
+        this.addTradeTickerEvent(`🚢 Chartered Sea Boat departed from ${coastalOwner.name} for ${this.territories[landlockedCode]?.name || landlockedCode}. Transit fee: 12,000 Gold paid.`);
+        return true;
+      }
+
+      handleTransportArrival(t) {
+        let basePayout = CONFIG.PAYOUTS.OWN;
+        const isOwn = t.toTerritory === t.ownerCode;
+        const diplo = this.diplomacy[t.toTerritory];
+
+        if (diplo?.embargo) {
+          basePayout = CONFIG.PAYOUTS.EMBARGO;
+        } else if (diplo?.pact) {
+          basePayout = (t.type === 'cargo_ship') ? CONFIG.PAYOUTS.PACT_SEA : CONFIG.PAYOUTS.PACT_RAIL;
+        } else if (!isOwn) {
+          basePayout = CONFIG.PAYOUTS.NEUTRAL;
+        }
+
+        const finalPayout = Math.round(basePayout * (t.multiplier || 1.0));
+
+        // Award revenue to sender and receiver
+        if (t.ownerCode === this.playerStateCode) {
+          this.gold += finalPayout;
+          this.createFloatingText(`+${(finalPayout/1000).toFixed(0)}K Gold`, t.lon, t.lat);
+        } else if (this.territories[t.ownerCode]) {
+          this.territories[t.ownerCode].gold += finalPayout;
+        }
+
+        if (t.toTerritory === this.playerStateCode && !isOwn) {
+          this.gold += finalPayout;
+        } else if (this.territories[t.toTerritory] && !isOwn) {
+          this.territories[t.toTerritory].gold += finalPayout;
+        }
+
+        this.addTradeTickerEvent(`📦 ${t.type.toUpperCase()} delivered to ${t.toTerritory}. Payout: +${finalPayout.toLocaleString()} Gold.`);
+      }
+
+      aiConstruct(territory) {
+        const caps = CONFIG.TERRITORY_CAPS[territory.size] || CONFIG.TERRITORY_CAPS.medium;
+        const bCounts = territory.buildingsCount;
+
+        if (bCounts.city < caps.maxCities && Math.random() < 0.4) {
+          const names = INDIAN_TERRITORIES[territory.code]?.cities || ['New Hub'];
+          const unused = names.find(n => !this.usedCityNames.has(n.toLowerCase()));
+          if (unused) {
+            const cost = this.getBuildingCost('city', territory.code);
+            if (territory.gold >= cost) {
+              territory.gold -= cost;
+              this.addBuilding({
+                ownerCode: territory.code,
+                type: 'city',
+                lon: territory.centroid[0] + (Math.random() - 0.5) * 0.8,
+                lat: territory.centroid[1] + (Math.random() - 0.5) * 0.8,
+                name: unused,
+              });
+            }
+          }
+        } else if (bCounts.factory < caps.maxFactories && territory.gold >= 700000) {
+          const cost = this.getBuildingCost('factory', territory.code);
+          if (territory.gold >= cost) {
+            territory.gold -= cost;
+            this.addBuilding({
+              ownerCode: territory.code,
+              type: 'factory',
+              lon: territory.centroid[0] + (Math.random() - 0.5) * 0.6,
+              lat: territory.centroid[1] + (Math.random() - 0.5) * 0.6,
+              name: territory.name + ' Industrial Plant',
+            });
+          }
+        }
+      }
+
+      createFloatingText(text, lon, lat) {
+        const pt = this.projection([lon, lat]);
+        if (!pt) return;
+        const [x, y] = this.zoomTransform.apply(pt);
+
+        const el = document.createElement('div');
+        el.className = 'gold-float';
+        el.innerText = text;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1400);
+      }
+
+      addTradeTickerEvent(msg) {
+        const content = document.getElementById('ticker-content');
+        if (!content) return;
+        const span = document.createElement('span');
+        span.className = 'ticker-item';
+        span.innerHTML = `• <span class="ticker-highlight">${msg}</span>`;
+        content.appendChild(span);
+        if (content.children.length > 8) {
+          content.removeChild(content.firstElementChild);
+        }
+      }
+    }
+
+    // --- 6. CANVAS RENDERER & INTERACTION ---
+    class CanvasRenderer {
+      constructor(engine) {
+        this.engine = engine;
+        this.canvas = document.getElementById('game-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.dpr = window.devicePixelRatio || 1;
+
+        this.topoData = null;
+        this.setupCanvas();
+        this.setupZoom();
+        this.setupEvents();
+      }
+
+      setupCanvas() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width * this.dpr;
+        this.canvas.height = this.height * this.dpr;
+        this.ctx.scale(this.dpr, this.dpr);
+
+        this.engine.projection
+          .translate([this.width / 2, this.height / 2])
+          .scale(1000);
+
+        this.geoPath = d3.geoPath(this.engine.projection, this.ctx);
+      }
+
+      setupZoom() {
+        this.zoom = d3.zoom()
+          .scaleExtent([0.5, 12])
+          .on('zoom', (event) => {
+            this.engine.zoomTransform = event.transform;
+            this.draw();
+          });
+
+        d3.select(this.canvas).call(this.zoom);
+      }
+
+      focusState(code) {
+        const t = INDIAN_TERRITORIES[code];
+        if (!t) return;
+        const [lon, lat] = t.centroid;
+        const pt = this.engine.projection([lon, lat]);
+        
+        const scale = t.size === 'small' ? 5.5 : t.size === 'medium' ? 4.0 : 3.0;
+        const transform = d3.zoomIdentity
+          .translate(this.width / 2, this.height / 2)
+          .scale(scale)
+          .translate(-pt[0], -pt[1]);
+
+        d3.select(this.canvas)
+          .transition()
+          .duration(1000)
+          .call(this.zoom.transform, transform);
+      }
+
+      focusIndia() {
+        const pt = this.engine.projection([78.96, 22.59]);
+        const transform = d3.zoomIdentity
+          .translate(this.width / 2, this.height / 2)
+          .scale(1.8)
+          .translate(-pt[0], -pt[1]);
+
+        d3.select(this.canvas)
+          .transition()
+          .duration(800)
+          .call(this.zoom.transform, transform);
+      }
+
+      focusWorld() {
+        const transform = d3.zoomIdentity
+          .translate(this.width / 2, this.height / 2)
+          .scale(0.85)
+          .translate(-this.width / 2, -this.height / 2);
+
+        d3.select(this.canvas)
+          .transition()
+          .duration(800)
+          .call(this.zoom.transform, transform);
+      }
+
+      setupEvents() {
+        window.addEventListener('resize', () => {
+          this.setupCanvas();
+          this.draw();
+        });
+
+        // Click on map to place building or inspect
+        this.canvas.addEventListener('click', (e) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const screenX = e.clientX - rect.left;
+          const screenY = e.clientY - rect.top;
+
+          // Invert zoom transform to canvas coordinates
+          const [cx, cy] = this.engine.zoomTransform.invert([screenX, screenY]);
+          const geoCoords = this.engine.projection.invert([cx, cy]);
+          if (!geoCoords) return;
+
+          const [lon, lat] = geoCoords;
+
+          // 1. Check if clicked on an existing building to inspect / upgrade
+          for (const b of this.engine.buildings) {
+            const bPt = this.engine.projection([b.lon, b.lat]);
+            const dist = Math.hypot(bPt[0] - cx, bPt[1] - cy);
+            if (dist < 14) {
+              this.inspectBuilding(b);
+              return;
+            }
+          }
+
+          // 2. If building tool active, validate and place
+          if (this.engine.activeTool) {
+            this.handleBuildingPlacement(lon, lat);
+            return;
+          }
+
+          // 3. Check if clicked inside an Indian territory
+          const clickedCode = this.findTerritoryAtCoords(lon, lat);
+          if (clickedCode) {
+            openDiplomacyModal(clickedCode);
+          }
+        });
+      }
+
+      findTerritoryAtCoords(lon, lat) {
+        for (const [code, t] of Object.entries(INDIAN_TERRITORIES)) {
+          if (lon >= t.bbox[0][0] && lon <= t.bbox[1][0] && lat >= t.bbox[0][1] && lat <= t.bbox[1][1]) {
+            return code;
+          }
+        }
+        return null;
+      }
+
+      handleBuildingPlacement(lon, lat) {
+        const playerCode = this.engine.playerStateCode;
+        const targetTerritory = this.findTerritoryAtCoords(lon, lat);
+
+        if (targetTerritory !== playerCode) {
+          showToast('⚠️ You can only build inside your own state borders!');
+          return;
+        }
+
+        const type = this.engine.activeTool;
+        const cost = this.engine.getBuildingCost(type, playerCode);
+
+        if (this.engine.gold < cost) {
+          showToast('⚠️ Insufficient Gold to construct this building!');
+          return;
+        }
+
+        // River Dock Validation
+        if (type === 'river_dock' && !this.engine.isNearRiver(lon, lat)) {
+          showToast('⚠️ River Docks must be built near a navigable Indian river!');
+          return;
+        }
+
+        // Port Validation
+        if (type === 'port' && (!INDIAN_TERRITORIES[playerCode]?.coastal || !this.engine.isNearCoast(lon, lat))) {
+          showToast('⚠️ Sea Ports must be built on a coastal border!');
+          return;
+        }
+
+        // City Naming Dialog
+        if (type === 'city') {
+          openCityNamingModal(lon, lat);
+          return;
+        }
+
+        // Construct Factory, Dock or Port directly
+        this.engine.gold -= cost;
+        this.engine.addBuilding({
+          ownerCode: playerCode,
+          type,
+          level: 1,
+          lon,
+          lat,
+          name: `${INDIAN_TERRITORIES[playerCode]?.name} ${type.replace('_', ' ').toUpperCase()}`,
+        });
+        showToast(`✅ Constructed Level 1 ${type.replace('_', ' ')} for ${cost.toLocaleString()} Gold.`);
+        this.engine.activeTool = null;
+        updateUI();
+      }
+
+      inspectBuilding(b) {
+        this.engine.selectedBuilding = b;
+        const inspector = document.getElementById('building-inspector');
+        if (!inspector) return;
+
+        document.getElementById('bi-icon').innerText = b.type === 'city' ? '🏙️' : b.type === 'factory' ? '🏭' : b.type === 'river_dock' ? '⚓' : '🚢';
+        document.getElementById('bi-name').innerText = b.name;
+        document.getElementById('bi-level').innerText = `Level ${b.level}`;
+        document.getElementById('bi-type').innerText = b.type.replace('_', ' ').toUpperCase();
+        document.getElementById('bi-perf').innerText = `${(1 + (b.level - 1) * CONFIG.UPGRADE_BONUS).toFixed(2)}×`;
+        
+        const upgCost = this.engine.getUpgradeCost(b);
+        document.getElementById('bi-upg-cost').innerText = upgCost === Infinity ? 'MAX' : `${(upgCost/1000).toFixed(0)}K Gold`;
+
+        inspector.style.display = 'block';
+      }
+
+      draw() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.save();
+
+        // Apply zoom transform
+        this.ctx.translate(this.engine.zoomTransform.x, this.engine.zoomTransform.y);
+        this.ctx.scale(this.engine.zoomTransform.k, this.engine.zoomTransform.k);
+
+        // 1. Draw Ocean Background
+        this.ctx.fillStyle = '#081421';
+        this.ctx.fillRect(-2000, -2000, 5000, 5000);
+
+        // 2. Draw Subtle World Continents (Cartographic Base)
+        this.drawWorldContinents();
+
+        // 3. Draw Sea Shipping Lanes
+        this.drawShippingLanes();
+
+        // 4. Draw Indian Rivers (Glowing Cyan)
+        this.drawRivers();
+
+        // 5. Draw Indian State Boundaries
+        this.drawIndianStates();
+
+        // 6. Draw Rail Connections between Buildings
+        this.drawRailwayLines();
+
+        // 7. Draw Buildings
+        this.drawBuildings();
+
+        // 8. Draw Transports (Trains, River Boats, Cargo Ships)
+        this.drawTransports();
+
+        this.ctx.restore();
+      }
+
+      drawWorldContinents() {
+        // Render stylized world geography
+        this.ctx.fillStyle = '#111f33';
+        this.ctx.strokeStyle = '#1a3352';
+        this.ctx.lineWidth = 0.5 / this.engine.zoomTransform.k;
+
+        for (const [code, p] of Object.entries(WORLD_POWERS)) {
+          const pt = this.engine.projection(p.centroid);
+          if (!pt) continue;
+          this.ctx.beginPath();
+          this.ctx.arc(pt[0], pt[1], 24, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+
+          // Country Label
+          if (this.engine.zoomTransform.k > 0.8) {
+            this.ctx.fillStyle = '#64748b';
+            this.ctx.font = '9px "Plus Jakarta Sans", sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(p.name, pt[0], pt[1] + 32);
+          }
+        }
+      }
+
+      drawShippingLanes() {
+        this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.18)';
+        this.ctx.setLineDash([3, 4]);
+        this.ctx.lineWidth = 1.0 / this.engine.zoomTransform.k;
+
+        for (const [s1, s2] of SEA_ROUTES) {
+          const p1 = this.engine.projection(SEA_WAYPOINTS[s1]);
+          const p2 = this.engine.projection(SEA_WAYPOINTS[s2]);
+          if (p1 && p2) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(p1[0], p1[1]);
+            this.ctx.lineTo(p2[0], p2[1]);
+            this.ctx.stroke();
+          }
+        }
+        this.ctx.setLineDash([]);
+      }
+
+      drawRivers() {
+        this.ctx.shadowColor = '#00f0ff';
+        this.ctx.shadowBlur = 8;
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = 1.8 / this.engine.zoomTransform.k;
+
+        for (const [rKey, river] of Object.entries(RIVERS)) {
+          this.ctx.beginPath();
+          let first = true;
+          for (const [lon, lat] of river.coords) {
+            const pt = this.engine.projection([lon, lat]);
+            if (pt) {
+              if (first) { this.ctx.moveTo(pt[0], pt[1]); first = false; }
+              else { this.ctx.lineTo(pt[0], pt[1]); }
+            }
+          }
+          this.ctx.stroke();
+
+          // River Name when zoomed in
+          if (this.engine.zoomTransform.k > 2.8) {
+            const mid = river.coords[Math.floor(river.coords.length / 2)];
+            const midPt = this.engine.projection(mid);
+            if (midPt) {
+              this.ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
+              this.ctx.font = '8px "Plus Jakarta Sans", sans-serif';
+              this.ctx.fillText(river.name, midPt[0], midPt[1] - 4);
+            }
+          }
+        }
+        this.ctx.shadowBlur = 0;
+      }
+
+      drawIndianStates() {
+        for (const [code, t] of Object.entries(INDIAN_TERRITORIES)) {
+          const pt = this.engine.projection(t.centroid);
+          if (!pt) continue;
+
+          const isPlayer = code === this.engine.playerStateCode;
+          const [minPt, maxPt] = [
+            this.engine.projection(t.bbox[0]),
+            this.engine.projection(t.bbox[1])
+          ];
+
+          // Fill state territorial zone
+          const w = Math.abs(maxPt[0] - minPt[0]);
+          const h = Math.abs(maxPt[1] - minPt[1]);
+
+          this.ctx.fillStyle = isPlayer ? 'rgba(251, 191, 36, 0.12)' : 'rgba(30, 51, 82, 0.65)';
+          this.ctx.strokeStyle = isPlayer ? '#fbbf24' : 'rgba(56, 189, 248, 0.35)';
+          this.ctx.lineWidth = (isPlayer ? 2.5 : 1.0) / this.engine.zoomTransform.k;
+
+          if (isPlayer) {
+            this.ctx.shadowColor = '#fbbf24';
+            this.ctx.shadowBlur = 10;
+          }
+
+          this.ctx.beginPath();
+          this.ctx.roundRect(Math.min(minPt[0], maxPt[0]), Math.min(minPt[1], maxPt[1]), w, h, 6);
+          this.ctx.fill();
+          this.ctx.stroke();
+          this.ctx.shadowBlur = 0;
+
+          // State Name & Code Label
+          if (this.engine.zoomTransform.k > 1.2) {
+            this.ctx.fillStyle = isPlayer ? '#fbbf24' : '#cbd5e1';
+            this.ctx.font = `bold ${isPlayer ? 11 : 9}px "Plus Jakarta Sans", sans-serif`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(t.name, pt[0], pt[1] - 8);
+          }
+        }
+      }
+
+      drawRailwayLines() {
+        this.ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
+        this.ctx.lineWidth = 1.0 / this.engine.zoomTransform.k;
+
+        for (let i = 0; i < this.engine.buildings.length; i++) {
+          for (let j = i + 1; j < this.engine.buildings.length; j++) {
+            const b1 = this.engine.buildings[i];
+            const b2 = this.engine.buildings[j];
+            // Connect nearby stations on land
+            if ((b1.type === 'city' || b1.type === 'factory') && (b2.type === 'city' || b2.type === 'factory')) {
+              const d = Math.hypot(b1.lon - b2.lon, b1.lat - b2.lat);
+              if (d < 3.5) {
+                const p1 = this.engine.projection([b1.lon, b1.lat]);
+                const p2 = this.engine.projection([b2.lon, b2.lat]);
+                if (p1 && p2) {
+                  this.ctx.beginPath();
+                  this.ctx.moveTo(p1[0], p1[1]);
+                  this.ctx.lineTo(p2[0], p2[1]);
+                  this.ctx.stroke();
+                }
+              }
+            }
+          }
+        }
+      }
+
+      drawBuildings() {
+        for (const b of this.engine.buildings) {
+          const pt = this.engine.projection([b.lon, b.lat]);
+          if (!pt) continue;
+
+          const isPlayer = b.ownerCode === this.engine.playerStateCode;
+          const radius = 6 / this.engine.zoomTransform.k;
+
+          this.ctx.beginPath();
+          this.ctx.arc(pt[0], pt[1], Math.max(4, radius), 0, Math.PI * 2);
+          this.ctx.fillStyle = b.type === 'city' ? '#38bdf8' : b.type === 'factory' ? '#fbbf24' : b.type === 'river_dock' ? '#34d399' : '#a78bfa';
+          this.ctx.fill();
+          this.ctx.strokeStyle = '#ffffff';
+          this.ctx.lineWidth = 1.0 / this.engine.zoomTransform.k;
+          this.ctx.stroke();
+
+          // Icon / Badge
+          if (this.engine.zoomTransform.k > 2.0) {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = '8px "JetBrains Mono", monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(`${b.name} (L${b.level})`, pt[0], pt[1] + 12);
+          }
+        }
+      }
+
+      drawTransports() {
+        for (const t of this.engine.transports) {
+          const pt = this.engine.projection([t.lon, t.lat]);
+          if (!pt) continue;
+
+          this.ctx.save();
+          this.ctx.translate(pt[0], pt[1]);
+
+          if (t.type === 'train') {
+            // Locomotive & Wagons
+            this.ctx.fillStyle = '#fbbf24';
+            this.ctx.fillRect(-4, -2, 8, 4);
+            this.ctx.fillStyle = '#94a3b8';
+            this.ctx.fillRect(-10, -2, 5, 4);
+            this.ctx.fillRect(-16, -2, 5, 4);
+          } else if (t.type === 'river_boat') {
+            // River Barge
+            this.ctx.fillStyle = '#34d399';
+            this.ctx.beginPath();
+            this.ctx.moveTo(5, 0);
+            this.ctx.lineTo(-4, -3);
+            this.ctx.lineTo(-4, 3);
+            this.ctx.closePath();
+            this.ctx.fill();
+          } else if (t.type === 'cargo_ship') {
+            // Cargo Ship
+            this.ctx.fillStyle = '#38bdf8';
+            this.ctx.fillRect(-6, -3, 12, 6);
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.fillRect(-2, -2, 4, 4);
+          }
+          this.ctx.restore();
+        }
+      }
+    }
+
+    // --- 7. GLOBAL CONTROLLER & UI WIRING ---
+    const engine = new GameEngine();
+    let renderer;
+
+    function initGame() {
+      renderer = new CanvasRenderer(engine);
+      setupUI();
+
+      // Main 60 FPS Game Loop
+      let last = performance.now();
+      function gameLoop(now) {
+        const delta = Math.min(now - last, 200);
+        last = now;
+        engine.tick(delta);
+        renderer.draw();
+        updateHUD();
+        requestAnimationFrame(gameLoop);
+      }
+      requestAnimationFrame(gameLoop);
+    }
+
+    function setupUI() {
+      // Populate State Grid in Welcome Modal
+      const grid = document.getElementById('state-selection-grid');
+      const search = document.getElementById('state-search-input');
+
+      function renderGrid(filter = '') {
+        grid.innerHTML = '';
+        for (const [code, t] of Object.entries(INDIAN_TERRITORIES)) {
+          if (filter && !t.name.toLowerCase().includes(filter) && !t.capital.toLowerCase().includes(filter) && !code.toLowerCase().includes(filter)) {
+            continue;
+          }
+          const card = document.createElement('div');
+          card.className = `state-card ${code === engine.playerStateCode ? 'selected' : ''}`;
+          card.innerHTML = `
+            <span class="sc-code">${code}</span>
+            <span class="sc-name">${t.name}</span>
+            <span class="sc-info">Capital: ${t.capital}</span>
+            <span class="sc-info">${t.coastal ? '🌊 Coastal' : '🏔️ Inland'}</span>
+          `;
+          card.onclick = () => {
+            engine.playerStateCode = code;
+            document.querySelectorAll('.state-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+          };
+          grid.appendChild(card);
+        }
+      }
+      renderGrid();
+
+      search.addEventListener('input', (e) => renderGrid(e.target.value.toLowerCase().trim()));
+
+      document.getElementById('btn-confirm-state').onclick = () => {
+        document.getElementById('state-select-modal').style.display = 'none';
+        const t = INDIAN_TERRITORIES[engine.playerStateCode];
+        document.getElementById('player-state-code').innerText = engine.playerStateCode;
+        document.getElementById('player-state-name').innerText = t.name;
+        renderer.focusState(engine.playerStateCode);
+        showToast(`🇮🇳 You are leading ${t.name}! Build infrastructure & expand trade.`);
+      };
+
+      // Camera Buttons
+      document.getElementById('btn-cam-state').onclick = () => renderer.focusState(engine.playerStateCode);
+      document.getElementById('btn-cam-india').onclick = () => renderer.focusIndia();
+      document.getElementById('btn-cam-world').onclick = () => renderer.focusWorld();
+
+      // Speed Buttons
+      const speeds = [
+        { id: 'btn-speed-pause', val: 0 },
+        { id: 'btn-speed-1x', val: 1 },
+        { id: 'btn-speed-2x', val: 2 },
+        { id: 'btn-speed-4x', val: 4 },
+      ];
+      speeds.forEach(s => {
+        document.getElementById(s.id).onclick = () => {
+          speeds.forEach(x => document.getElementById(x.id).classList.remove('active'));
+          document.getElementById(s.id).classList.add('active');
+          engine.speed = s.val;
+          engine.isPaused = (s.val === 0);
+        };
+      });
+
+      // Economy Allocation Slider
+      const slider = document.getElementById('econ-slider');
+      slider.oninput = (e) => {
+        engine.workerRatio = e.target.value / 100;
+        document.getElementById('slider-civic-pct').innerText = `${100 - e.target.value}% Civic`;
+        document.getElementById('slider-worker-pct').innerText = `${e.target.value}% Workers`;
+      };
+
+      // Building Toolbar Buttons
+      document.querySelectorAll('.build-btn[data-type]').forEach(btn => {
+        btn.onclick = () => {
+          const type = btn.dataset.type;
+          if (engine.activeTool === type) {
+            engine.activeTool = null;
+            btn.classList.remove('selected');
+          } else {
+            document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            engine.activeTool = type;
+            showToast(`🔨 Click valid empty location in ${INDIAN_TERRITORIES[engine.playerStateCode]?.name} to place ${type.replace('_', ' ')}.`);
+          }
+        };
+      });
+
+      // Building Inspector Close & Upgrade
+      document.getElementById('bi-btn-close').onclick = () => {
+        document.getElementById('building-inspector').style.display = 'none';
+        engine.selectedBuilding = null;
+      };
+
+      document.getElementById('bi-btn-upgrade').onclick = () => {
+        if (!engine.selectedBuilding) return;
+        if (engine.upgradeBuilding(engine.selectedBuilding)) {
+          showToast(`⬆ Upgraded ${engine.selectedBuilding.name} to Level ${engine.selectedBuilding.level}!`);
+          renderer.inspectBuilding(engine.selectedBuilding);
+          updateUI();
+        } else {
+          showToast('⚠️ Cannot upgrade building (insufficient funds or max level).');
+        }
+      };
+
+      // City Naming Modal
+      document.getElementById('btn-close-city-modal').onclick = () => document.getElementById('city-naming-modal').style.display = 'none';
+      document.getElementById('btn-cancel-city').onclick = () => document.getElementById('city-naming-modal').style.display = 'none';
+
+      // Leaderboard Toggle
+      document.getElementById('leaderboard-toggle-btn').onclick = () => {
+        document.getElementById('leaderboard-wrap').classList.toggle('collapsed');
+      };
+
+      // Diplomacy Modal Close
+      document.getElementById('btn-close-diplo').onclick = () => document.getElementById('diplomacy-modal').style.display = 'none';
+      document.getElementById('btn-close-diplo-footer').onclick = () => document.getElementById('diplomacy-modal').style.display = 'none';
+      document.getElementById('btn-diplomacy-dock').onclick = () => openDiplomacyModal(engine.playerStateCode === 'MH' ? 'GJ' : 'MH');
+    }
+
+    function openCityNamingModal(lon, lat) {
+      const modal = document.getElementById('city-naming-modal');
+      const input = document.getElementById('city-name-input');
+      const pool = document.getElementById('city-suggestions-pool');
+      const err = document.getElementById('city-name-error');
+      
+      modal.style.display = 'flex';
+      err.style.display = 'none';
+      input.value = '';
+
+      // Suggest unused cities for player state
+      const names = INDIAN_TERRITORIES[engine.playerStateCode]?.cities || ['Amravati', 'Nashik', 'Solapur'];
+      pool.innerHTML = '';
+      names.forEach(n => {
+        if (!engine.usedCityNames.has(n.toLowerCase())) {
+          const chip = document.createElement('span');
+          chip.className = 'suggestion-chip';
+          chip.innerText = n;
+          chip.onclick = () => { input.value = n; err.style.display = 'none'; };
+          pool.appendChild(chip);
+        }
+      });
+
+      document.getElementById('btn-confirm-city').onclick = () => {
+        const val = input.value.trim();
+        if (!val) return;
+        if (engine.usedCityNames.has(val.toLowerCase())) {
+          err.style.display = 'block';
+          return;
+        }
+
+        const cost = engine.getBuildingCost('city', engine.playerStateCode);
+        engine.gold -= cost;
+        engine.addBuilding({
+          ownerCode: engine.playerStateCode,
+          type: 'city',
+          level: 1,
+          lon,
+          lat,
+          name: val,
+        });
+
+        modal.style.display = 'none';
+        engine.activeTool = null;
+        showToast(`🏙️ Founded City of ${val}! Station active.`);
+        updateUI();
+      };
+    }
+
+    function openDiplomacyModal(code) {
+      engine.inspectingTerritory = code;
+      const t = INDIAN_TERRITORIES[code];
+      if (!t) return;
+
+      const modal = document.getElementById('diplomacy-modal');
+      modal.style.display = 'flex';
+      document.getElementById('diplo-title').innerText = `Diplomacy: ${t.name} (${code})`;
+
+      const diplo = engine.diplomacy[code];
+      const isPlayer = code === engine.playerStateCode;
+      
+      const statusEl = document.getElementById('diplo-status');
+      if (diplo?.pact) {
+        statusEl.innerText = '🤝 Trade Pact Ally';
+        statusEl.style.color = 'var(--emerald)';
+      } else if (diplo?.embargo) {
+        statusEl.innerText = '🚫 Embargoed Rival';
+        statusEl.style.color = 'var(--crimson)';
+      } else {
+        statusEl.innerText = 'Neutral';
+        statusEl.style.color = 'var(--cyan)';
+      }
+
+      document.getElementById('diplo-multiplier').innerText = diplo?.pact ? '1.60× (+40K/+55K)' : diplo?.embargo ? '0.00× (0 Gold)' : '1.00× (+25K)';
+      document.getElementById('diplo-coast').innerText = t.coastal ? '🌊 Coastal (Port Eligible)' : '🏔️ Landlocked Territory';
+
+      // Chartered Sea Boat button visibility
+      const charterBtn = document.getElementById('btn-diplo-charter');
+      const playerT = INDIAN_TERRITORIES[engine.playerStateCode];
+      if (!playerT.coastal && t.coastal && diplo?.pact) {
+        charterBtn.style.display = 'flex';
+        charterBtn.onclick = () => {
+          engine.dispatchCharteredSeaBoat(engine.playerStateCode, code);
+          showToast(`🚢 Chartered ship dispatched via ${t.name}! Port transit fee paid: 12,000 Gold.`);
+        };
+      } else {
+        charterBtn.style.display = 'none';
+      }
+
+      // Propose / Cancel Pact
+      const pactBtn = document.getElementById('btn-diplo-pact');
+      pactBtn.innerText = diplo?.pact ? 'Cancel Trade Pact' : '🤝 Propose Trade Pact';
+      pactBtn.onclick = () => {
+        diplo.pact = !diplo.pact;
+        diplo.embargo = false;
+        showToast(diplo.pact ? `🤝 Signed Trade Pact with ${t.name}!` : `Cancelled Trade Pact with ${t.name}.`);
+        openDiplomacyModal(code);
+      };
+
+      // Embargo
+      const embargoBtn = document.getElementById('btn-diplo-embargo');
+      embargoBtn.innerText = diplo?.embargo ? 'Remove Embargo' : '🚫 Issue Embargo';
+      embargoBtn.onclick = () => {
+        diplo.embargo = !diplo.embargo;
+        diplo.pact = false;
+        showToast(diplo.embargo ? `🚫 Embargo issued against ${t.name}!` : `Removed embargo from ${t.name}.`);
+        openDiplomacyModal(code);
+      };
+    }
+
+    function updateHUD() {
+      // Format Gold
+      const g = engine.gold;
+      const gStr = g >= 1000000 ? `${(g / 1000000).toFixed(2)}M` : `${(g / 1000).toFixed(1)}K`;
+      document.getElementById('hud-gold-val').innerText = gStr;
+
+      // Update building costs
+      const types = ['city', 'factory', 'river_dock', 'port'];
+      types.forEach(type => {
+        const cost = engine.getBuildingCost(type, engine.playerStateCode);
+        const el = document.getElementById(`cost-${type}`);
+        if (el) el.innerText = `${(cost / 1000).toFixed(0)}K`;
+      });
+
+      // Update metrics
+      const playerT = engine.territories[engine.playerStateCode];
+      if (playerT) {
+        document.getElementById('hud-pop-val').innerText = `${(playerT.population / 1000000).toFixed(1)}M`;
+        document.getElementById('hud-maxpop-val').innerText = `${(playerT.maxPopulation / 1000000).toFixed(1)}M`;
+      }
+
+      renderLeaderboard();
+    }
+
+    function renderLeaderboard() {
+      const list = document.getElementById('lb-items');
+      if (!list) return;
+
+      // Sort Indian territories by economic score
+      const sorted = Object.values(engine.territories).sort((a, b) => {
+        const scoreA = (a.code === engine.playerStateCode ? engine.gold : a.gold) + a.population * 0.05;
+        const scoreB = (b.code === engine.playerStateCode ? engine.gold : b.gold) + b.population * 0.05;
+        return scoreB - scoreA;
+      });
+
+      list.innerHTML = '';
+      sorted.slice(0, 15).forEach((t, i) => {
+        const isPlayer = t.code === engine.playerStateCode;
+        const g = isPlayer ? engine.gold : t.gold;
+        const row = document.createElement('div');
+        row.className = `lb-row ${isPlayer ? 'player-row' : ''}`;
+        row.innerHTML = `
+          <span class="lb-rank">#${i + 1}</span>
+          <span class="lb-name">${t.name}</span>
+          <span class="lb-stat">${(g / 1000).toFixed(0)}K</span>
+        `;
+        row.onclick = () => {
+          renderer.focusState(t.code);
+          openDiplomacyModal(t.code);
+        };
+        list.appendChild(row);
+      });
+    }
+
+    function updateUI() {
+      updateHUD();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('notice-toast');
+      const text = document.getElementById('notice-text');
+      if (!toast || !text) return;
+      text.innerText = msg;
+      toast.classList.add('visible');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('visible'), 2800);
+    }
+
+    // Auto-Save every 10 seconds to LocalStorage
+    setInterval(() => {
+      try {
+        const save = {
+          playerStateCode: engine.playerStateCode,
+          gold: engine.gold,
+          workerRatio: engine.workerRatio,
+          buildings: engine.buildings,
+          usedCityNames: Array.from(engine.usedCityNames),
+        };
+        localStorage.setItem('bharatfront_save_v1', JSON.stringify(save));
+      } catch (e) {
+        console.warn('Save failed:', e);
+      }
+    }, 10000);
+
+    // Launch Game on Window Load
+    window.addEventListener('DOMContentLoaded', () => {
+      initGame();
+    });
+  </script>
+</body>
+</html>
