@@ -5,7 +5,10 @@ import {
   TerritoryCode,
   PlayerAction,
   GameSpeed,
+  BuildingCategory,
 } from '@india-statecraft/shared-types';
+import { getProgressiveBuildingCostUSD } from '@india-statecraft/game-data';
+import { formatUSD } from '@india-statecraft/map-data';
 import { createInitialGameState, stepSimulation } from '@india-statecraft/simulation';
 import { MapView } from './map/MapView';
 import { HeaderHUD } from './components/HeaderHUD';
@@ -52,6 +55,8 @@ export const App: React.FC = () => {
   const [zoomTarget, setZoomTarget] = useState<'WORLD' | 'INDIA' | 'STATE' | null>(null);
   const [cameraLevel, setCameraLevel] = useState<'WORLD' | 'INDIA' | 'STATE'>('INDIA');
   const [monthProgress, setMonthProgress] = useState<number>(0);
+  const [activeBuildTool, setActiveBuildTool] = useState<BuildingCategory | null>(null);
+  const [buildNotice, setBuildNotice] = useState<string | null>(null);
 
   // Keep a stable ref to current state for the simulation loop
   const stateRef = useRef(gameState);
@@ -167,6 +172,71 @@ export const App: React.FC = () => {
   const inspectedStateProfile = gameState.states[inspectedStateCode] || gameState.states['MH'];
   const playerControlledStateProfile = gameState.states[gameState.selectedPlayerState] || gameState.states['MH'];
 
+  const showBuildNotice = useCallback((msg: string) => {
+    setBuildNotice(msg);
+    setTimeout(() => setBuildNotice((curr) => (curr === msg ? null : curr)), 3200);
+  }, []);
+
+  const handlePlaceBuilding = useCallback(
+    (clickedStateCode: TerritoryCode, coords: [number, number], locationName?: string) => {
+      if (!activeBuildTool) return;
+      const playerCode = stateRef.current.selectedPlayerState;
+      const playerState = stateRef.current.states[playerCode];
+      if (!playerState) return;
+
+      if (clickedStateCode !== playerCode) {
+        showBuildNotice(`You can only build inside your selected state (${playerState.name}).`);
+        return;
+      }
+
+      if (activeBuildTool === 'RESIDENTIAL') {
+        if (!locationName) {
+          showBuildNotice('Cities can only be placed on highlighted cities or towns on the map.');
+          return;
+        }
+        const alreadyBuilt = playerState.buildings.some(
+          (b) => b.type === 'RESIDENTIAL' && b.locationName === locationName
+        );
+        if (alreadyBuilt) {
+          showBuildNotice(`${locationName} already has a City Hub.`);
+          return;
+        }
+      }
+
+      if (activeBuildTool === 'SEAPORT' && playerState.infrastructure.portType !== 'COASTAL_PORT') {
+        showBuildNotice(`${playerState.name} is landlocked — Ports can only be built in coastal states.`);
+        return;
+      }
+
+      const ownedCount = playerState.buildings.filter((b) => b.type === activeBuildTool).length;
+      const costUSD = getProgressiveBuildingCostUSD(activeBuildTool, ownedCount);
+      if (playerState.economy.treasuryUSD < costUSD) {
+        showBuildNotice(`Insufficient treasury: needs ${formatUSD(costUSD)}.`);
+        return;
+      }
+
+      dispatchAction({
+        type: 'COMMENCE_BUILDING_CONSTRUCTION',
+        stateCode: playerCode,
+        buildingType: activeBuildTool,
+        coords,
+        locationName,
+      });
+
+      const label =
+        activeBuildTool === 'RESIDENTIAL'
+          ? `City (${locationName})`
+          : activeBuildTool === 'SEAPORT'
+          ? 'Sea Port'
+          : activeBuildTool === 'FACTORY'
+          ? 'Factory'
+          : 'Rail Hub';
+      showBuildNotice(`Started ${label} for ${formatUSD(costUSD)}.`);
+      setActiveBuildTool(null);
+    },
+    [activeBuildTool, dispatchAction, showBuildNotice]
+  );
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans">
       {/* 1. Pre-Game State Selection Screen */}
@@ -214,10 +284,86 @@ export const App: React.FC = () => {
         states={gameState.states}
         activeMode={activeMode}
         selectedStateCode={inspectedStateCode}
+        playerStateCode={gameState.selectedPlayerState}
+        activeBuildTool={activeBuildTool}
+        onPlaceBuilding={handlePlaceBuilding}
         onSelectState={handleSelectStateOnMap}
         zoomTarget={zoomTarget}
         onZoomComplete={() => setZoomTarget(null)}
       />
+
+      {/* 4b. OpenFront-Style Map Building Placement Bar */}
+      {gameState.phase === 'PLAYING' && (
+        <div className="absolute left-4 top-32 z-20 pointer-events-auto flex flex-col gap-1.5 bg-slate-950/85 border border-slate-700/60 rounded-2xl p-2 backdrop-blur-md shadow-xl w-44">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1.5">
+            Place on Map
+          </div>
+          {(
+            [
+              { type: 'RESIDENTIAL' as BuildingCategory, label: 'City (Towns)', icon: '🏙️' },
+              { type: 'FACTORY' as BuildingCategory, label: 'Factory', icon: '🏭' },
+              { type: 'RAILWAY_DEPOT' as BuildingCategory, label: 'Rail Hub', icon: '🚂' },
+              { type: 'SEAPORT' as BuildingCategory, label: 'Sea Port', icon: '🚢' },
+            ]
+          ).map((item) => {
+            const owned = playerControlledStateProfile.buildings.filter((b) => b.type === item.type).length;
+            const cost = getProgressiveBuildingCostUSD(item.type, owned);
+            const isSelected = activeBuildTool === item.type;
+            const isDisabled =
+              item.type === 'SEAPORT' && playerControlledStateProfile.infrastructure.portType !== 'COASTAL_PORT';
+            return (
+              <button
+                key={item.type}
+                disabled={isDisabled}
+                onClick={() => {
+                  setActiveBuildTool((curr) => (curr === item.type ? null : item.type));
+                  if (!isSelected) {
+                    setZoomTarget('STATE');
+                    setCameraLevel('STATE');
+                  }
+                }}
+                title={
+                  isDisabled
+                    ? 'Coastal states only'
+                    : item.type === 'RESIDENTIAL'
+                    ? 'Click highlighted cities/towns in your state to build'
+                    : `Click inside ${playerControlledStateProfile.name} to place`
+                }
+                className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
+                  isDisabled
+                    ? 'opacity-40 cursor-not-allowed text-slate-500'
+                    : isSelected
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                    : 'bg-slate-900/70 text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </span>
+                <span className={`font-mono text-[10px] ${isSelected ? 'text-slate-900' : 'text-amber-400'}`}>
+                  {formatUSD(cost)}
+                </span>
+              </button>
+            );
+          })}
+          {activeBuildTool && (
+            <button
+              onClick={() => setActiveBuildTool(null)}
+              className="text-[10px] text-slate-400 hover:text-white py-1 text-center"
+            >
+              Cancel Placement
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Build Feedback Toast */}
+      {buildNotice && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full bg-slate-900/95 border border-amber-500/50 text-xs font-semibold text-amber-300 shadow-2xl pointer-events-none">
+          {buildNotice}
+        </div>
+      )}
 
       {/* 5. Thematic Map Modes Bar (12 Modes) */}
       <MapModeBar activeMode={activeMode} onSelectMode={setActiveMode} />

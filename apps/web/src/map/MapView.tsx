@@ -4,13 +4,13 @@ import {
   MapMode,
   TerritoryCode,
   StateProfile,
+  BuildingCategory,
 } from '@india-statecraft/shared-types';
 import {
   MAP_MODES,
   getMapColorForValue,
   STATE_CENTROIDS,
   MAJOR_CITIES,
-  RAILWAY_CORRIDORS,
   formatUSD,
 } from '@india-statecraft/map-data';
 
@@ -18,6 +18,9 @@ interface MapViewProps {
   states: Record<TerritoryCode, StateProfile>;
   activeMode: MapMode;
   selectedStateCode: TerritoryCode;
+  playerStateCode: TerritoryCode;
+  activeBuildTool: BuildingCategory | null;
+  onPlaceBuilding: (stateCode: TerritoryCode, coords: [number, number], locationName?: string) => void;
   onSelectState: (code: TerritoryCode) => void;
   zoomTarget: 'WORLD' | 'INDIA' | 'STATE' | null;
   onZoomComplete: () => void;
@@ -27,6 +30,9 @@ export const MapView: React.FC<MapViewProps> = ({
   states,
   activeMode,
   selectedStateCode,
+  playerStateCode,
+  activeBuildTool,
+  onPlaceBuilding,
   onSelectState,
   zoomTarget,
   onZoomComplete,
@@ -35,6 +41,16 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const isLoadedRef = useRef(false);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+
+  // Latest props in refs for MapLibre event listeners
+  const activeBuildToolRef = useRef<BuildingCategory | null>(activeBuildTool);
+  const playerStateCodeRef = useRef<TerritoryCode>(playerStateCode);
+  const onPlaceBuildingRef = useRef(onPlaceBuilding);
+  const onSelectStateRef = useRef(onSelectState);
+  activeBuildToolRef.current = activeBuildTool;
+  playerStateCodeRef.current = playerStateCode;
+  onPlaceBuildingRef.current = onPlaceBuilding;
+  onSelectStateRef.current = onSelectState;
 
   // Initialize MapLibre
   useEffect(() => {
@@ -142,39 +158,8 @@ export const MapView: React.FC<MapViewProps> = ({
           filter: ['==', 'code', selectedStateCode],
         });
 
-        // 5. Major Railway Network Lines
-        const railwayGeoJSON: GeoJSON.FeatureCollection = {
-          type: 'FeatureCollection',
-          features: RAILWAY_CORRIDORS.map((c, i) => ({
-            type: 'Feature',
-            id: i,
-            properties: { from: c.fromCity, to: c.toCity },
-            geometry: {
-              type: 'LineString',
-              coordinates: [c.fromCoords, c.toCoords],
-            },
-          })),
-        };
-
-        map.addSource('railway-corridors', {
-          type: 'geojson',
-          data: railwayGeoJSON,
-        });
-
-        map.addLayer({
-          id: 'railway-lines',
-          type: 'line',
-          source: 'railway-corridors',
-          paint: {
-            'line-color': '#fbbf24',
-            'line-width': 1.6,
-            'line-opacity': 0.70,
-            'line-dasharray': [3, 2],
-          },
-        });
-
-        // 6. Major Cities Nodes
-        const citiesGeoJSON: GeoJSON.FeatureCollection = {
+        // 5. Eligible Cities & Towns Layer (visible ONLY when placing a City in player's state)
+        const townsGeoJSON: GeoJSON.FeatureCollection = {
           type: 'FeatureCollection',
           features: MAJOR_CITIES.map((city, idx) => ({
             type: 'Feature',
@@ -183,7 +168,6 @@ export const MapView: React.FC<MapViewProps> = ({
               name: city.name,
               code: city.stateCode,
               isCapital: city.isCapital,
-              pop: `${city.populationM}M`,
             },
             geometry: {
               type: 'Point',
@@ -192,38 +176,134 @@ export const MapView: React.FC<MapViewProps> = ({
           })),
         };
 
-        map.addSource('major-cities', {
+        map.addSource('eligible-towns', {
           type: 'geojson',
-          data: citiesGeoJSON,
+          data: townsGeoJSON,
         });
 
         map.addLayer({
-          id: 'cities-points',
+          id: 'eligible-towns-layer',
           type: 'circle',
-          source: 'major-cities',
+          source: 'eligible-towns',
           paint: {
-            'circle-radius': ['case', ['get', 'isCapital'], 5, 3.5],
-            'circle-color': ['case', ['get', 'isCapital'], '#f59e0b', '#38bdf8'],
-            'circle-stroke-width': 1.5,
+            'circle-radius': 7,
+            'circle-color': '#38bdf8',
+            'circle-opacity': 0.85,
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': '#fbbf24',
+          },
+          layout: {
+            visibility: 'none',
+          },
+        });
+
+        // 6. Player/State Placed Buildings Layer (only structures actually built on the map)
+        map.addSource('placed-buildings', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+
+        map.addLayer({
+          id: 'placed-buildings-layer',
+          type: 'circle',
+          source: 'placed-buildings',
+          paint: {
+            'circle-radius': 6.5,
+            'circle-color': [
+              'match',
+              ['get', 'type'],
+              'RESIDENTIAL', '#38bdf8',
+              'SEAPORT', '#8b5cf6',
+              'FACTORY', '#f59e0b',
+              'RAILWAY_DEPOT', '#10b981',
+              '#e2e8f0',
+            ],
+            'circle-stroke-width': 2,
             'circle-stroke-color': '#0f172a',
           },
         });
 
+        map.addLayer({
+          id: 'placed-buildings-labels',
+          type: 'symbol',
+          source: 'placed-buildings',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 11,
+            'text-offset': [0, 1.3],
+            'text-anchor': 'top',
+          },
+          paint: {
+            'text-color': '#f8fafc',
+            'text-halo-color': '#0f172a',
+            'text-halo-width': 1.5,
+          },
+        });
+
+        // Click on eligible town target when placing a City
+        map.on('click', 'eligible-towns-layer', (e) => {
+          if (!e.features || e.features.length === 0) return;
+          if (activeBuildToolRef.current !== 'RESIDENTIAL') return;
+          e.originalEvent.stopPropagation();
+
+          const feat = e.features[0];
+          const townCode = feat.properties?.code as TerritoryCode;
+          const townName = feat.properties?.name as string;
+          const coords = (feat.geometry as GeoJSON.Point).coordinates as [number, number];
+
+          if (townCode === playerStateCodeRef.current) {
+            onPlaceBuildingRef.current(townCode, coords, townName);
+          }
+        });
+
+        map.on('mouseenter', 'eligible-towns-layer', () => {
+          map.getCanvas().style.cursor = 'crosshair';
+        });
+        map.on('mouseleave', 'eligible-towns-layer', () => {
+          map.getCanvas().style.cursor = '';
+        });
+
         // Click interaction on state:
-        // Automatically selects state AND smoothly zooms into it!
+        // If building tool active -> place building inside player state (Cities require town snap!)
+        // Otherwise -> selects state & zooms into it
         map.on('click', 'states-fill', (e) => {
           if (!e.features || e.features.length === 0) return;
           const code = e.features[0].properties?.code as TerritoryCode;
-          if (code) {
-            onSelectState(code);
-            const centroid = STATE_CENTROIDS[code];
-            if (centroid) {
-              map.flyTo({
-                center: centroid,
-                zoom: 6.0,
-                duration: 1000,
+          if (!code) return;
+
+          const activeTool = activeBuildToolRef.current;
+          if (activeTool) {
+            // If placing a City, check if click is near an eligible town in player's state
+            if (activeTool === 'RESIDENTIAL') {
+              const townFeatures = map.queryRenderedFeatures(e.point, {
+                layers: ['eligible-towns-layer'],
               });
+              if (townFeatures.length > 0) {
+                const town = townFeatures[0];
+                const townCode = town.properties?.code as TerritoryCode;
+                const townName = town.properties?.name as string;
+                const coords = (town.geometry as GeoJSON.Point).coordinates as [number, number];
+                onPlaceBuildingRef.current(townCode, coords, townName);
+                return;
+              }
+              // Clicked empty land instead of a town
+              onPlaceBuildingRef.current(code, [e.lngLat.lng, e.lngLat.lat], undefined);
+              return;
             }
+
+            // Other structures (Factory, Port, Rail Hub) can be placed directly in player state
+            onPlaceBuildingRef.current(code, [e.lngLat.lng, e.lngLat.lat]);
+            return;
+          }
+
+          onSelectStateRef.current(code);
+          const centroid = STATE_CENTROIDS[code];
+          if (centroid) {
+            map.flyTo({
+              center: centroid,
+              zoom: 6.0,
+              duration: 1000,
+            });
           }
         });
 
@@ -294,6 +374,58 @@ export const MapView: React.FC<MapViewProps> = ({
       mapRef.current.setFilter('state-selected-outline', ['==', 'code', selectedStateCode]);
     }
   }, [selectedStateCode]);
+
+  // Show eligible towns ONLY when placing a City in the player's state
+  useEffect(() => {
+    if (!mapRef.current || !isLoadedRef.current) return;
+    const map = mapRef.current;
+    if (map.getLayer('eligible-towns-layer')) {
+      if (activeBuildTool === 'RESIDENTIAL') {
+        map.setLayoutProperty('eligible-towns-layer', 'visibility', 'visible');
+        map.setFilter('eligible-towns-layer', ['==', 'code', playerStateCode]);
+      } else {
+        map.setLayoutProperty('eligible-towns-layer', 'visibility', 'none');
+      }
+    }
+    map.getCanvas().style.cursor = activeBuildTool ? 'crosshair' : '';
+  }, [activeBuildTool, playerStateCode]);
+
+  // Sync placed buildings on the map
+  useEffect(() => {
+    if (!mapRef.current || !isLoadedRef.current) return;
+    const source = mapRef.current.getSource('placed-buildings') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const features: GeoJSON.Feature[] = [];
+    for (const st of Object.values(states)) {
+      for (const b of st.buildings) {
+        if (b.coords) {
+          const shortType =
+            b.type === 'RESIDENTIAL'
+              ? 'City'
+              : b.type === 'SEAPORT'
+              ? 'Port'
+              : b.type === 'FACTORY'
+              ? 'Factory'
+              : 'Rail Hub';
+          features.push({
+            type: 'Feature',
+            properties: {
+              id: b.id,
+              type: b.type,
+              label: b.locationName ? `${b.locationName} (${shortType})` : shortType,
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: b.coords,
+            },
+          });
+        }
+      }
+    }
+
+    source.setData({ type: 'FeatureCollection', features });
+  }, [states]);
 
   // Handle camera zoom transitions from navigation controls
   useEffect(() => {

@@ -196,9 +196,9 @@ export const BUILDING_DEFINITIONS: Record<BuildingCategory, BuildingDefinition> 
     type: 'SEAPORT',
     name: 'Deepwater Maritime Container Port',
     description: 'Major international seaport handling containerized maritime cargo, coastal shipping, and customs.',
-    constructionCostUSD: 220_000_000, // $220M
-    constructionTimeTicks: 28,        // 28 months
-    monthlyOperatingExpenseUSD: 850_000,
+    constructionCostUSD: 140_000_000, // $140M base (scales progressively)
+    constructionTimeTicks: 24,        // 24 months
+    monthlyOperatingExpenseUSD: 750_000,
     requiredPowerMW: 40,
     requiredWater: false,
     requiresCoastal: true, // Geographic constraint
@@ -209,20 +209,34 @@ export const BUILDING_DEFINITIONS: Record<BuildingCategory, BuildingDefinition> 
   },
   RESIDENTIAL: {
     type: 'RESIDENTIAL',
-    name: 'Smart Urban Township',
-    description: 'High-density planned residential sector with public transit, clean tap water, and sanitation.',
-    constructionCostUSD: 60_000_000,
-    constructionTimeTicks: 10,
-    monthlyOperatingExpenseUSD: 340_000,
+    name: 'City Urban Hub',
+    description: 'Urban city hub placed on an existing town/city, expanding population capacity, tax base, and local trade.',
+    constructionCostUSD: 35_000_000, // $35M base (scales progressively)
+    constructionTimeTicks: 8,
+    monthlyOperatingExpenseUSD: 300_000,
     requiredPowerMW: 25,
     requiredWater: true,
     requiresCoastal: false,
     requiresRiver: false,
-    monthlyGdpValueAddedUSD: 800_000,
-    employmentProvided: 550,
+    monthlyGdpValueAddedUSD: 1_100_000,
+    employmentProvided: 950,
     happinessBonus: 5,
   },
 };
+
+/**
+ * OpenFront-inspired progressive cost scaling, balanced for USD strategy economy:
+ * Each additional building of the same type costs 1.35x more (capped at 10x base cost).
+ */
+export function getProgressiveBuildingCostUSD(
+  buildingType: BuildingCategory,
+  ownedCountOfType: number
+): number {
+  const def = BUILDING_DEFINITIONS[buildingType];
+  if (!def) return 0;
+  const multiplier = Math.min(10, Math.pow(1.35, Math.max(0, ownedCountOfType)));
+  return Math.round(def.constructionCostUSD * multiplier);
+}
 
 // ----------------- TRAIN CONFIGURATIONS & PRICING -----------------
 export const TRAIN_CONFIGS: Record<TrainType, TrainConfig> = {

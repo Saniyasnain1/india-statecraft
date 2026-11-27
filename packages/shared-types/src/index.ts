@@ -190,6 +190,8 @@ export interface StateBuildingInstance {
   ticksRemaining: number;
   totalTicks: number;
   healthPercent: number;
+  coords?: [number, number];
+  locationName?: string;
 }
 
 // ----------------- FULL STATE PROFILE -----------------
@@ -258,5 +260,5 @@ export type PlayerAction =
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'UPDATE_TAX_POLICY'; stateCode: TerritoryCode; taxPolicy: TaxPolicySettings }
   | { type: 'PURCHASE_TRAIN_ROUTE'; stateCode: TerritoryCode; fromCity: string; toCity: string; trainType: TrainType; activeTrainsCount: number; distanceKm: number }
-  | { type: 'COMMENCE_BUILDING_CONSTRUCTION'; stateCode: TerritoryCode; buildingType: BuildingCategory }
+  | { type: 'COMMENCE_BUILDING_CONSTRUCTION'; stateCode: TerritoryCode; buildingType: BuildingCategory; coords?: [number, number]; locationName?: string }
   | { type: 'REBALANCE_PUBLIC_BUDGET'; stateCode: TerritoryCode; publicInvestmentShare: number; welfareShare: number };

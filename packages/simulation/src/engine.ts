@@ -8,6 +8,7 @@ import {
 import {
   ALL_TERRITORIES_DATA,
   BUILDING_DEFINITIONS,
+  getProgressiveBuildingCostUSD,
   calculateTrainEconomics,
   DEFAULT_GAME_TIME_CONFIG,
 } from '@india-statecraft/game-data';
@@ -279,8 +280,12 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
       const buildingDef = BUILDING_DEFINITIONS[action.buildingType];
       if (!stateObj || !buildingDef) return state;
 
+      // Progressive OpenFront-style cost scaling balanced for USD economy
+      const ownedOfType = stateObj.buildings.filter((b) => b.type === action.buildingType).length;
+      const costUSD = getProgressiveBuildingCostUSD(action.buildingType, ownedOfType);
+
       // Check treasury funds
-      if (stateObj.economy.treasuryUSD < buildingDef.constructionCostUSD) {
+      if (stateObj.economy.treasuryUSD < costUSD) {
         return state; // Insufficient funds
       }
 
@@ -299,9 +304,11 @@ function handlePlayerAction(state: GameState, action: PlayerAction): GameState {
         ticksRemaining: buildingDef.constructionTimeTicks,
         totalTicks: buildingDef.constructionTimeTicks,
         healthPercent: 100,
+        coords: action.coords,
+        locationName: action.locationName,
       };
 
-      const nextTreasury = stateObj.economy.treasuryUSD - buildingDef.constructionCostUSD;
+      const nextTreasury = stateObj.economy.treasuryUSD - costUSD;
 
       return {
         ...state,
