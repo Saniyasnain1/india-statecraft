@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// Import compiled packages or direct sources
-import { ALL_STATE_CODES, ALL_UT_CODES, INITIAL_STATES_DATA } from '../packages/game-data/dist/index.js';
-import { MAP_MODES, getMapColorForValue } from '../packages/map-data/dist/index.js';
-import { createInitialGameState, stepSimulation } from '../packages/simulation/dist/index.js';
+// Import from workspace package names — npm resolves these via node_modules symlinks
+import { ALL_STATE_CODES, ALL_UT_CODES, INITIAL_STATES_DATA } from '@india-statecraft/game-data';
+import { MAP_MODES, getMapColorForValue } from '@india-statecraft/map-data';
+import { createInitialGameState, stepSimulation } from '@india-statecraft/simulation';
 
 test('1. Territory Coverage & Integrity', () => {
   assert.equal(ALL_STATE_CODES.length, 28, 'Must have exactly 28 Indian States');

@@ -1,12 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "rootDir": "src",
     "outDir": "./dist",
-    "declaration": true,
-    "paths": {
-      "@india-statecraft/shared-types": ["../shared-types/src/index.ts"],
-      "@india-statecraft/game-data": ["../game-data/src/index.ts"]
-    }
+    "declaration": true
   },
   "include": ["src/**/*"]
 }
